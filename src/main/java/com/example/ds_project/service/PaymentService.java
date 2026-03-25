@@ -12,14 +12,22 @@ import java.util.List;
 public class PaymentService {
     private final PaymentRepository repository;
     private final NodeConfig nodeConfig;
+    private final ReplicationService replicationService;
 
-    public PaymentService(PaymentRepository repository, NodeConfig nodeConfig) {
+
+    public PaymentService(PaymentRepository repository, NodeConfig nodeConfig, ReplicationService replicationService) {
         this.repository = repository;
         this.nodeConfig = nodeConfig;
+        this.replicationService = replicationService;
     }
     public Payment processPayment(BigDecimal amount) {
         Payment newPayment = new Payment(amount, nodeConfig.getNodeId());
-        return repository.save(newPayment);
+        Payment saved = repository.save(newPayment);
+
+        // Trigger replication
+        replicationService.replicateToOtherNodes(saved);
+
+        return saved;
     }
     public List<Payment> getAllPayments(){
         return repository.findAll();
