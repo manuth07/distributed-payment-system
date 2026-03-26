@@ -35,3 +35,8 @@ build/
 # Ignore ZooKeeper binaries
 apache-zookeeper-*-bin/
 
+
+# Raft Persistence Data & Logs
+data/
+*.log
+
