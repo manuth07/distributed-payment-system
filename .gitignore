@@ -32,3 +32,11 @@ build/
 ### VS Code ###
 .vscode/
     
+# Ignore ZooKeeper binaries
+apache-zookeeper-*-bin/
+
+
+# Raft Persistence Data & Logs
+data/
+*.log
+
