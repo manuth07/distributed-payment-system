@@ -40,4 +40,13 @@ public class TimeSyncConfig {
         
         return new ClockSynchronizationService(nodeId, serviceDataDir);
     }
+    
+    /**
+     * Create the ClockSkewMonitor bean (Phase 2).
+     */
+    @Bean
+    public ClockSkewMonitor clockSkewMonitor() {
+        log.info("Initializing ClockSkewMonitor for {}", nodeId);
+        return new ClockSkewMonitor();
+    }
 }
