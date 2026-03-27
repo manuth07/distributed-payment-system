@@ -136,6 +136,22 @@ public class RaftNode {
 
     public ReentrantLock getLock() { return lock; }
 
+    // Leader-specific state (Raft paper §5.1)
+    private final java.util.Map<String, Long> nextIndex = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, Long> matchIndex = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void initializeLeaderState(java.util.List<String> peers, long lastLogIndex) {
+        nextIndex.clear();
+        matchIndex.clear();
+        for (String peer : peers) {
+            nextIndex.put(peer, lastLogIndex + 1);
+            matchIndex.put(peer, -1L);
+        }
+    }
+
+    public java.util.Map<String, Long> getNextIndex() { return nextIndex; }
+    public java.util.Map<String, Long> getMatchIndex() { return matchIndex; }
+
     // Internal DTO for persistence
     private record StateData(long currentTerm, String votedFor) {}
 }

@@ -11,6 +11,16 @@ public class Payment {
     private String status;
     private LocalDateTime timestamp;
 
+    public Payment() {} // Default for JSON
+
+    public Payment(String id, String nodeId, BigDecimal amount, String status, LocalDateTime timestamp) {
+        this.id = id;
+        this.nodeId = nodeId;
+        this.amount = amount;
+        this.status = status;
+        this.timestamp = timestamp;
+    }
+
     public Payment(BigDecimal  amount, String nodeId) {
         this.id = UUID.randomUUID().toString();
         this.amount = amount;
