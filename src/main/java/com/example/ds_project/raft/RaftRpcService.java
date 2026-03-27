@@ -3,6 +3,7 @@ package com.example.ds_project.raft;
 import com.example.ds_project.coordination.LeaderState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.locks.ReentrantLock;
@@ -14,11 +15,13 @@ public class RaftRpcService {
     private final RaftNode raftNode;
     private final RaftLog raftLog;
     private final LeaderState leaderState;
+    private final RaftLeaderManager raftLeaderManager;
 
-    public RaftRpcService(RaftNode raftNode, RaftLog raftLog, LeaderState leaderState) {
+    public RaftRpcService(RaftNode raftNode, RaftLog raftLog, LeaderState leaderState, @Lazy RaftLeaderManager raftLeaderManager) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.leaderState = leaderState;
+        this.raftLeaderManager = raftLeaderManager;
     }
 
     public RequestVoteResponse handleRequestVote(RequestVoteRequest request) {
@@ -98,6 +101,8 @@ public class RaftRpcService {
             
             // Revert/refresh to FOLLOWER when valid AppendEntries is received
             raftNode.setState(RaftNode.State.FOLLOWER);
+            // *** Critical: Reset election timer so we don't start a spurious election ***
+            raftLeaderManager.resetElectionTimeout();
             
             long lastIndex = raftLog.getLastLogIndex();
 
