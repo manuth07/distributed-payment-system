@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.example.ds_project.timesync.ClockSynchronizationService;
+import com.example.ds_project.timesync.ClockSkewMonitor;
 
 /**
  * Spring configuration for time synchronization components.
@@ -42,11 +43,8 @@ public class TimeSyncConfig {
     }
     
     /**
-     * Create the ClockSkewMonitor bean (Phase 2).
+     * ClockSkewMonitor is automatically detected and instantiated by Spring
+     * as a @Service bean (see ClockSkewMonitor.java).
+     * No @Bean method needed - it will be auto-wired where required.
      */
-    @Bean
-    public ClockSkewMonitor clockSkewMonitor() {
-        log.info("Initializing ClockSkewMonitor for {}", nodeId);
-        return new ClockSkewMonitor();
-    }
 }
