@@ -50,14 +50,17 @@ public class KafkaConsumerService {
             try {
                 log.info("I am LEADER. Packaging {} into Raft Log for consensus.", event.paymentId());
                 
-                // Create a success-intent payment object
+                // Phase 3b: Create payment with Time Synchronization metadata
                 // Note: event.timestamp() is already corrected by ClockSynchronizationService in producer
                 Payment payment = new Payment(
                         event.paymentId().toString(),
                         "cluster-consensus",
                         event.amount(),
                         "SUCCESS",
-                        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC)
+                        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC),
+                        event.timestamp(),           // <- correctedTimestamp (event.timestamp() already includes offset)
+                        event.clockOffsetApplied(),  // <- offset that was applied at source
+                        event.publishingNodeId()     // <- which node originally published
                 );
 
                 String payload = objectMapper.writeValueAsString(payment);
