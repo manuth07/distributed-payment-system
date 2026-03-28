@@ -1,6 +1,7 @@
 package com.example.ds_project.kafka;
 
 import com.example.ds_project.raft.RaftNode;
+import com.example.ds_project.timesync.ClockSynchronizationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ public class KafkaProducerService {
 
     private final KafkaTemplate<String, PaymentEvent> kafkaTemplate;
     private final RaftNode raftNode;
+    private final ClockSynchronizationService clockSyncService;
 
     @Value("${raft.node.id}")
     private String nodeId;
@@ -34,15 +36,32 @@ public class KafkaProducerService {
     @Value("${spring.kafka.consumer.group-id}")
     private String consumerGroupId;
 
-    public KafkaProducerService(KafkaTemplate<String, PaymentEvent> kafkaTemplate, RaftNode raftNode) {
+    public KafkaProducerService(KafkaTemplate<String, PaymentEvent> kafkaTemplate, RaftNode raftNode,
+                                 ClockSynchronizationService clockSyncService) {
         this.kafkaTemplate = kafkaTemplate;
         this.raftNode = raftNode;
+        this.clockSyncService = clockSyncService;
     }
 
     public PaymentResponse publishPayment(BigDecimal amount) {
         UUID paymentId = UUID.randomUUID();
-        long ts = System.currentTimeMillis();
-        PaymentEvent event = new PaymentEvent(paymentId, amount, ts, "PENDING");
+        long rawTimestamp = System.currentTimeMillis();
+        
+        // Phase 3a: Apply clock offset correction BEFORE publishing to Kafka
+        long clockOffset = clockSyncService.getCurrentOffset();
+        long correctedTimestamp = rawTimestamp + clockOffset;
+        
+        log.debug("Publishing payment {}: rawTs={}, offset={}ms, correctedTs={}",
+                paymentId, rawTimestamp, clockOffset, correctedTimestamp);
+        
+        PaymentEvent event = new PaymentEvent(
+                paymentId,
+                amount,
+                correctedTimestamp,      // <- CORRECTED TIMESTAMP
+                "PENDING",
+                clockOffset,             // <- AUDIT TRAIL: offset applied
+                nodeId                   // <- AUDIT TRAIL: publishing node
+        );
 
         // Track whether Kafka delivery actually succeeded
         AtomicReference<Throwable> kafkaError = new AtomicReference<>();
@@ -70,7 +89,7 @@ public class KafkaProducerService {
         return PaymentResponse.builder()
                 .paymentId(paymentId)
                 .amount(amount)
-                .timestamp(ts)
+                .timestamp(correctedTimestamp)  // <- Use corrected timestamp in response
                 .raftStatus(kafkaError.get() != null ? "KAFKA_ERROR" : "PENDING")
                 .raftLeaderNodeId(leaderNodeId)
                 .raftLeaderUrl(leaderUrl)
@@ -82,6 +101,7 @@ public class KafkaProducerService {
                 .kafkaTopic(TOPIC)
                 .kafkaConsumerGroup(consumerGroupId)
                 .receivingNode(nodeId)
+                .clockOffsetApplied(clockOffset)     // <- NEW: track offset in response
                 .build();
     }
 
