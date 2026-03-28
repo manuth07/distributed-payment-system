@@ -1,43 +1,79 @@
-# Testing the Distributed Payment System with Postman
+# Testing the Distributed Payment System with Docker & Postman
 
-This guide explains how to test the hybrid Raft + ZooKeeper distributed payment system locally using Postman. The cluster consists of 5 payment nodes and 3 ZooKeeper instances.
+This guide explains how to test the new **Kafka-backed, Load-Balanced, Raft-coordinated** distributed payment system.
 
-## 1. Starting the Cluster
-Before testing, ensure you have the ZooKeeper ensemble running locally (ports 2181, 2182, 2183).
+## 1. Starting the Entire Cluster
+We now use Docker Compose to manage 10 connected services: 3 ZooKeepers, 1 Kafka broker, 1 Nginx Load Balancer, and 5 Payment Nodes.
 
-Launch all 5 payment instances, overriding the `SERVER_PORT` for each:
 ```bash
-# Start all 5 nodes manually via Bash or PowerShell:
-java -jar target/DS_project-0.0.1-SNAPSHOT.jar --SERVER_PORT=8081
-java -jar target/DS_project-0.0.1-SNAPSHOT.jar --SERVER_PORT=8082
-java -jar target/DS_project-0.0.1-SNAPSHOT.jar --SERVER_PORT=8083
-java -jar target/DS_project-0.0.1-SNAPSHOT.jar --SERVER_PORT=8084
-java -jar target/DS_project-0.0.1-SNAPSHOT.jar --SERVER_PORT=8085
+# Clean and compile your Java code first
+mvn clean package -DskipTests
+
+# Start everything globally
+docker-compose up -d --build
 ```
 
-## 2. Testing Payment Creation
-The Leader node will process the payment directly, or any Follower will automatically forward the transaction to the Leader.
+## 2. The New Architecture
+- **Load Balancer (Nginx)**: Listens on port `8080`. It automatically distributes requests to the 5 nodes.
+- **Kafka**: Acts as an asynchronous buffer. Payments are accepted immediately and finalized later.
+- **Consensus**: Only the Raft Leader processes the messages from Kafka into the permanent ledger.
+
+## 3. Testing Payment Creation (Asynchronous)
+Instead of hitting a specific node, you now hit the central API Gateway.
 
 - **Method**: `POST`
-- **URL**: `http://localhost:8081/payments?amount=300` (or any port 8081-8085)
-- **Response**: You should receive a `200 OK` with the created payment JSON:
+- **URL**: `http://localhost:8080/payments?amount=250`
+- **Response**:
   ```json
   {
-      "id": "ea5552bd-d5d3-484e-bcce-82a67a05629c",
-      "nodeId": "node-8081",
-      "amount": 300,
-      "status": "SUCCESS"
+      "paymentId": "550e8400-e29b-41d4-a716-446655440000",
+      "amount": 250,
+      "timestamp": 1711584000000,
+      "raftStatus": "PENDING",
+      "raftLeaderNodeId": "node-8082",
+      "raftLeaderUrl": "http://node2:8082",
+      "replicatedToNodes": 3,
+      "quorumRequired": 3,
+      "consensusReached": true,
+      "raftTerm": 2,
+      "logIndex": 5,
+      "kafkaTopic": "payments",
+      "kafkaConsumerGroup": "ds-payment-group",
+      "receivingNode": "node-8081"
   }
   ```
+> [!NOTE]
+> `raftStatus` is `PENDING` immediately. Once the Raft state machine commits the entry (usually within 200ms), the payment appears in `GET /payments` as `SUCCESS`.
 
-## 3. Testing High Availability (Failover)
-To test the failover and Raft log replication explicitly:
-1. Send a POST request to a follower (e.g., `8085`) and ensure it succeeds (it routes to the leader, e.g., `8081`).
-2. Forcefully kill the leader process (`8081`).
-3. Immediately send the same POST request to the follower (`8085`).
-4. The system will hold the request briefly. Once the new leader is elected by the remaining 4 nodes, the request will succeed and return the JSON response seamlessly without throwing a 500 error.
+## 4. Verifying Kafka Flow
+To confirm your payment is actually flowing through Kafka, check the logs of any node:
+```bash
+docker-compose logs -f node1 | findstr "Kafka\|Consumed\|Appended\|Consensus"
+```
+You should see a sequence like:
+```
+Published payment 550e8400... to Kafka topic 'payments'   ← Producer sent it
+Consumed payment 550e8400... off Kafka stream.            ← Consumer received it
+I am LEADER. Packaging 550e8400... into Raft Log          ← Leader appended to log
+Appended log entry 6 for payment 550e8400...              ← Log index
+Consensus reached on index 6. Updating commitIndex.       ← Quorum achieved
+State Machine: Applied payment 550e8400... (Index: 6)     ← Saved to DB
+```
 
-## 4. Testing Payment Retrieval
-To retrieve all committed payments from the cluster via any node:
+## 4. Checking Raft Consensus Status
+Monitor which node is the leader and the state of their commit logs:
+- **URL**: `http://localhost:8080/raft/status`
+- **What to look for**: The `commitIndex` should be identical across all healthy nodes.
+
+## 5. Testing Fault Tolerance (The "Crash Test")
+This is where the Kafka + Load Balancer architecture shines:
+
+1. **Submit a payment** via the Load Balancer (`8080`).
+2. **Abruptly kill a node** (even the leader!): `docker kill node1`
+3. **Submit another payment** via the Load Balancer (`8080`).
+4. **Observation**: The second payment will **NOT** fail. Nginx will route it to an alive node, and Kafka will hold the message until the cluster elects a new leader and resumes processing.
+
+## 6. Verifying Finalized Ledger
+To see the actual processed payments that passed consensus:
 - **Method**: `GET`
-- **URL**: `http://localhost:8081/payments` (or any valid node URL)
+- **URL**: `http://localhost:8080/payments`
