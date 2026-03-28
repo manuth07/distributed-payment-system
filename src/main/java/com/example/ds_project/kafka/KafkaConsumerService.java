@@ -40,16 +40,18 @@ public class KafkaConsumerService {
     @KafkaListener(topics = "payments", groupId = "${spring.kafka.consumer.group-id}")
     public void consume(PaymentEvent event) {
         if (!processedPayments.add(event.paymentId())) {
-            return;
+            return;  // Deduplication: skip if already processed
         }
 
-        log.info("Consumed payment {} off Kafka stream.", event.paymentId());
+        log.info("Consumed payment {} from Kafka stream (published by {}, offset applied: {}ms)",
+                event.paymentId(), event.publishingNodeId(), event.clockOffsetApplied());
 
         if (raftNode.getState() == RaftNode.State.LEADER) {
             try {
                 log.info("I am LEADER. Packaging {} into Raft Log for consensus.", event.paymentId());
                 
                 // Create a success-intent payment object
+                // Note: event.timestamp() is already corrected by ClockSynchronizationService in producer
                 Payment payment = new Payment(
                         event.paymentId().toString(),
                         "cluster-consensus",
@@ -60,17 +62,20 @@ public class KafkaConsumerService {
 
                 String payload = objectMapper.writeValueAsString(payment);
                 
+                // Create LogEntry with the event's timestamp (already corrected)
+                // This ensures Raft log entries also have corrected timestamps
                 LogEntry entry = new LogEntry(
                         raftLog.getLastLogIndex() + 1,
                         raftNode.getCurrentTerm(),
                         event.paymentId().toString(),
                         payload,
-                        System.currentTimeMillis(),
+                        event.timestamp(),  // <- Use corrected timestamp from event
                         LogEntry.LogStatus.PENDING
                 );
 
                 raftLog.appendEntry(entry);
-                log.info("Appended log entry {} for payment {}. Triggering replication.", entry.getIndex(), event.paymentId());
+                log.info("Appended log entry {} for payment {} (timestamp: {}ms)",
+                        entry.getIndex(), event.paymentId(), event.timestamp());
                 
                 // Speed up consensus by triggering replication immediately
                 raftLeaderManager.replicateToAll();

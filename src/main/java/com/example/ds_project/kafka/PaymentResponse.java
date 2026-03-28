@@ -29,6 +29,9 @@ public class PaymentResponse {
     // Receiving node
     private String receivingNode;       // which node this request was received by
 
+    // Time Synchronization  (Phase 3a)
+    private long clockOffsetApplied;    // clock offset that was applied (ms)
+
     public PaymentResponse() {}
 
     public static Builder builder() { return new Builder(); }
@@ -49,6 +52,7 @@ public class PaymentResponse {
         public Builder kafkaTopic(String v)       { r.kafkaTopic = v; return this; }
         public Builder kafkaConsumerGroup(String v){ r.kafkaConsumerGroup = v; return this; }
         public Builder receivingNode(String v)    { r.receivingNode = v; return this; }
+        public Builder clockOffsetApplied(long v) { r.clockOffsetApplied = v; return this; }
         public PaymentResponse build()            { return r; }
     }
 
@@ -67,4 +71,5 @@ public class PaymentResponse {
     public String getKafkaTopic()       { return kafkaTopic; }
     public String getKafkaConsumerGroup(){ return kafkaConsumerGroup; }
     public String getReceivingNode()    { return receivingNode; }
+    public long getClockOffsetApplied() { return clockOffsetApplied; }
 }
