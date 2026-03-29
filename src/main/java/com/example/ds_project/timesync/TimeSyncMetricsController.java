@@ -5,10 +5,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST Controller for clock skew monitoring and metrics.
- * Exposes endpoints for viewing skew measurements, history, and statistics.
+ * Exposes endpoints for viewing skew measurements, history, statistics, and log reordering.
  */
 @Slf4j
 @RestController
@@ -17,6 +18,9 @@ public class TimeSyncMetricsController {
     
     @Autowired
     private ClockSkewMonitor clockSkewMonitor;
+    
+    @Autowired(required = false)
+    private RaftLogReorderService raftLogReorderService;  // Phase 4: Optional bean
     
     /**
      * Get the latest clock skew measurement.
@@ -83,5 +87,42 @@ public class TimeSyncMetricsController {
         log.debug("Skew statistics requested for {} hours: min={}ms, max={}ms, avg={}ms",
                 hours, stats.minSkew(), stats.maxSkew(), stats.averageSkew());
         return stats;
+    }
+    
+    /**
+     * Phase 4: Get log reordering statistics for out-of-order entry detection.
+     * Shows how many entries needed reordering and current buffer state.
+     * 
+     * @return Reordering statistics including counts and ratios
+     */
+    @GetMapping("/reorder-statistics")
+    public Map<String, Object> getReorderStatistics() {
+        if (raftLogReorderService == null) {
+            log.warn("RaftLogReorderService not available");
+            return Map.of("status", "unavailable", "message", "RaftLogReorderService not configured");
+        }
+        
+        Map<String, Object> stats = raftLogReorderService.getReorderingStatistics();
+        log.debug("Reorder statistics: {}", raftLogReorderService.getReorderingStatisticsFormatted());
+        return stats;
+    }
+    
+    /**
+     * Phase 4: Get formatted reordering report for human consumption.
+     * 
+     * @return Formatted reordering summary
+     */
+    @GetMapping("/reorder-report")
+    public Map<String, Object> getReorderReport() {
+        if (raftLogReorderService == null) {
+            return Map.of("status", "unavailable");
+        }
+        
+        return Map.of(
+                "status", "ok",
+                "summary", raftLogReorderService.getReorderingStatisticsFormatted(),
+                "bufferUtilization", String.format("%.1f%%", 
+                        raftLogReorderService.getAverageBufferUtilization() * 100)
+        );
     }
 }
