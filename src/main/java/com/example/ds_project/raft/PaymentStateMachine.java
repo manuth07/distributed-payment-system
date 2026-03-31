@@ -51,6 +51,13 @@ public class PaymentStateMachine {
             // Reconstruct the payment from the JSON data stored in the Raft log
             Payment payment = objectMapper.readValue(entry.getPayload(), Payment.class);
             
+            // Deduplication: Check if this payment ID has already been applied to the state machine
+            if (repository.findById(payment.getId()).isPresent()) {
+                log.warn("Cluster Deduplication: Payment {} already exists in state machine (Log Index: {}). Skipping.", 
+                        payment.getId(), entry.getIndex());
+                return;
+            }
+            
             // Persist to the local ledger (State Machine)
             repository.save(payment);
             

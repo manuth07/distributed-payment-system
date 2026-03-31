@@ -51,6 +51,15 @@ public class KafkaConsumerService {
 
         if (raftNode.getState() == RaftNode.State.LEADER) {
             try {
+                // Leader Deduplication: Re-check against the log to avoid appending the same ID twice
+                boolean alreadyInLog = raftLog.getEntries().stream()
+                        .anyMatch(e -> event.paymentId().toString().equals(e.getPaymentId()));
+                
+                if (alreadyInLog) {
+                    log.info("Leader Deduplication: Payment {} already exists in Raft log. Ignoring.", event.paymentId());
+                    return;
+                }
+
                 log.info("I am LEADER. Packaging {} into Raft Log for consensus.", event.paymentId());
                 
                 // Phase 3b: Create payment with Time Synchronization metadata
