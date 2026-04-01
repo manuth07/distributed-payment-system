@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 @Repository
 public class PaymentRepository {
 
-    private Map<String, Payment> paymentStore = new HashMap<>();
+    private Map<String, Payment> paymentStore = new java.util.concurrent.ConcurrentHashMap<>();
 
     public Payment save(Payment payment) {
         paymentStore.put(payment.getId(), payment);
@@ -104,5 +104,9 @@ public class PaymentRepository {
         stats.put("timeSpanMs", maxTs - minTs);
         
         return stats;
+    }
+
+    public long count() {
+        return paymentStore.size();
     }
 }

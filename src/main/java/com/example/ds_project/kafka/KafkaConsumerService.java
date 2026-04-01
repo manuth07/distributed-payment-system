@@ -1,18 +1,12 @@
 package com.example.ds_project.kafka;
 
-import com.example.ds_project.model.Payment;
-import com.example.ds_project.raft.LogEntry;
-import com.example.ds_project.raft.RaftLog;
-import com.example.ds_project.raft.RaftNode;
-import com.example.ds_project.raft.RaftLeaderManager;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.ds_project.service.PaymentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,23 +15,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class KafkaConsumerService {
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumerService.class);
 
-    private final RaftNode raftNode;
-    private final RaftLog raftLog;
-    private final RaftLeaderManager raftLeaderManager;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PaymentService paymentService;
 
-    // Task 3: Deduplication memory caching
+    @Value("${server.port}")
+    private String serverPort;
+
+    // Task 5: Deduplication
     private final Set<UUID> processedPayments = ConcurrentHashMap.newKeySet();
 
-    public KafkaConsumerService(RaftNode raftNode, RaftLog raftLog, RaftLeaderManager raftLeaderManager) {
-        this.raftNode = raftNode;
-        this.raftLog = raftLog;
-        this.raftLeaderManager = raftLeaderManager;
-        // Registers LocalTime modules if needed, but our Payment uses LocalDateTime
-        this.objectMapper.findAndRegisterModules(); 
+    public KafkaConsumerService(PaymentService paymentService) {
+        this.paymentService = paymentService;
     }
 
-    @KafkaListener(topics = "payments", groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(topics = "payments", groupId = "payment-group")
     public void consume(PaymentEvent event) {
         if (!processedPayments.add(event.paymentId())) {
             return;  // Deduplication: skip if already processed

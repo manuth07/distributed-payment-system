@@ -59,6 +59,23 @@ public class PaymentController {
         return service.getAllPayments();
     }
 
+    @GetMapping("/count")
+    public long getCount() {
+        return service.getCount();
+    }
+
+    /**
+     * GET /node/info
+     * Returns: port, nodeId
+     */
+    @GetMapping("/node/info")
+    public Map<String, String> getNodeInfo() {
+        Map<String, String> info = new LinkedHashMap<>();
+        info.put("port", System.getenv("SERVER_PORT")); // Better fallback might be possible but SERVER_PORT is set
+        info.put("nodeId", nodeId);
+        return info;
+    }
+
     /**
      * GET /payments/cluster-status
      * Returns a live snapshot of this node's view of the entire Raft cluster.
