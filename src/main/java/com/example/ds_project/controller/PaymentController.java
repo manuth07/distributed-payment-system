@@ -132,4 +132,55 @@ public class PaymentController {
 
         return ResponseEntity.ok(status);
     }
+
+    /**
+     * Phase 3c: GET /payments/by-timestamp?startMs=X&endMs=Y
+     * Returns payments within a correctedTimestamp range, sorted chronologically.
+     * Useful for time-window queries like "payments from the last 5 minutes".
+     */
+    @GetMapping("/by-timestamp")
+    public ResponseEntity<List<Payment>> getPaymentsByTimestampRange(
+            @RequestParam(required = false) Long startMs,
+            @RequestParam(required = false) Long endMs) {
+        
+        if (startMs == null || endMs == null) {
+            return ResponseEntity.badRequest().body(List.of());
+        }
+        
+        List<Payment> payments = service.getPaymentsByTimestampRange(startMs, endMs);
+        return ResponseEntity.ok(payments);
+    }
+
+    /**
+     * Phase 3c: GET /payments/by-node?nodeId=node1
+     * Returns payments created by a specific node, sorted by correctedTimestamp.
+     * Useful for per-node payment verification.
+     */
+    @GetMapping("/by-node")
+    public ResponseEntity<List<Payment>> getPaymentsByNode(@RequestParam String nodeId) {
+        List<Payment> payments = service.getPaymentsByNodeId(nodeId);
+        return ResponseEntity.ok(payments);
+    }
+
+    /**
+     * Phase 3c: GET /payments/by-publishing-node?publishingNodeId=node2
+     * Returns payments published by a specific node (source identification).
+     * Useful for audit trails and multi-node payment verification.
+     */
+    @GetMapping("/by-publishing-node")
+    public ResponseEntity<List<Payment>> getPaymentsByPublishingNode(@RequestParam String publishingNodeId) {
+        List<Payment> payments = service.getPaymentsByPublishingNodeId(publishingNodeId);
+        return ResponseEntity.ok(payments);
+    }
+
+    /**
+     * Phase 3c: GET /payments/statistics
+     * Returns timestamp and clock offset statistics for monitoring.
+     * Includes min/max corrected timestamps, time span, and count.
+     */
+    @GetMapping("/statistics")
+    public ResponseEntity<Map<String, Object>> getPaymentStatistics() {
+        Map<String, Object> stats = service.getPaymentStatistics();
+        return ResponseEntity.ok(stats);
+    }
 }

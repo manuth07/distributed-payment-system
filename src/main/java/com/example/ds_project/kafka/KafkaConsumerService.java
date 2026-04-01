@@ -29,25 +29,56 @@ public class KafkaConsumerService {
 
     @KafkaListener(topics = "payments", groupId = "payment-group")
     public void consume(PaymentEvent event) {
-        try {
-            log.info("=== KAFKA CONSUMER TRIGGERED on Node {} ===", serverPort);
-            log.info("Received event: paymentId={}, amount={}", event.paymentId(), event.amount());
+        if (!processedPayments.add(event.paymentId())) {
+            return;  // Deduplication: skip if already processed
+        }
 
-            // Task 5: Deduplication
-            if (!processedPayments.add(event.paymentId())) {
-                log.info("Duplicate ignored for payment {}", event.paymentId());
-                return;
+        log.info("Consumed payment {} from Kafka stream (published by {}, offset applied: {}ms)",
+                event.paymentId(), event.publishingNodeId(), event.clockOffsetApplied());
+
+        if (raftNode.getState() == RaftNode.State.LEADER) {
+            try {
+                log.info("I am LEADER. Packaging {} into Raft Log for consensus.", event.paymentId());
+                
+                // Phase 3b: Create payment with Time Synchronization metadata
+                // Note: event.timestamp() is already corrected by ClockSynchronizationService in producer
+                Payment payment = new Payment(
+                        event.paymentId().toString(),
+                        "cluster-consensus",
+                        event.amount(),
+                        "SUCCESS",
+                        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC),
+                        event.timestamp(),           // <- correctedTimestamp (event.timestamp() already includes offset)
+                        event.clockOffsetApplied(),  // <- offset that was applied at source
+                        event.publishingNodeId()     // <- which node originally published
+                );
+
+                String payload = objectMapper.writeValueAsString(payment);
+                
+                // Create LogEntry with the event's timestamp (already corrected)
+                // This ensures Raft log entries also have corrected timestamps
+                LogEntry entry = new LogEntry(
+                        raftLog.getLastLogIndex() + 1,
+                        raftNode.getCurrentTerm(),
+                        event.paymentId().toString(),
+                        payload,
+                        event.timestamp(),  // <- Use corrected timestamp from event
+                        LogEntry.LogStatus.PENDING
+                );
+
+                raftLog.appendEntry(entry);
+                log.info("Appended log entry {} for payment {} (timestamp: {}ms)",
+                        entry.getIndex(), event.paymentId(), event.timestamp());
+                
+                // Speed up consensus by triggering replication immediately
+                raftLeaderManager.replicateToAll();
+                
+            } catch (Exception e) {
+                log.error("Failed to append payment {} to Raft log", event.paymentId(), e);
             }
-
-            // Task 7: Required log format
-            log.info("Node {} consumed payment {}", serverPort, event.paymentId());
-
-            // Process and store — NO leader check
-            paymentService.processPayment(event);
-
-            log.info("=== PIPELINE COMPLETE for {} on Node {} ===", event.paymentId(), serverPort);
-        } catch (Exception e) {
-            log.error("FATAL: Consumer failed to process payment on Node {}", serverPort, e);
+        } else {
+            log.info("I am {}. Acknowledged payment {} but waiting for replication from Leader.", 
+                    raftNode.getState(), event.paymentId());
         }
     }
 }
