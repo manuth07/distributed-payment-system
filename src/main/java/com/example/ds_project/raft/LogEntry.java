@@ -1,6 +1,12 @@
 package com.example.ds_project.raft;
 
-public class LogEntry {
+import com.example.ds_project.timesync.Timestamped;
+
+/**
+ * Raft log entry with support for out-of-order reordering (Phase 4).
+ * Implements Timestamped to work with LogReorderBuffer for distributed ordering.
+ */
+public class LogEntry implements Timestamped {
     private long index;
     private long term;
     private String paymentId;
@@ -41,4 +47,15 @@ public class LogEntry {
 
     public LogStatus getStatus() { return status; }
     public void setStatus(LogStatus status) { this.status = status; }
+    
+    /**
+     * Phase 4: Implement Timestamped interface for out-of-order log reordering.
+     * Returns the corrected timestamp for ordering purposes.
+     * 
+     * @return correctedTimestamp (stored in the timestamp field)
+     */
+    @Override
+    public long getCorrectedTimestamp() {
+        return timestamp;
+    }
 }

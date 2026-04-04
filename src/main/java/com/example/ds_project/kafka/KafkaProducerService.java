@@ -91,7 +91,7 @@ public class KafkaProducerService {
                 .paymentId(paymentId)
                 .amount(amount)
                 .timestamp(correctedTimestamp)  // <- Use corrected timestamp in response
-                .raftStatus(kafkaError.get() != null ? "KAFKA_ERROR" : "PENDING")
+                .raftStatus(raftStatus)
                 .raftLeaderNodeId(leaderNodeId)
                 .raftLeaderUrl(leaderUrl)
                 .replicatedToNodes(1)

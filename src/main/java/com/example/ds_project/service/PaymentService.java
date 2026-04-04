@@ -1,13 +1,18 @@
 package com.example.ds_project.service;
 
+import com.example.ds_project.config.NodeConfig;
 import com.example.ds_project.kafka.PaymentEvent;
 import com.example.ds_project.model.Payment;
 import com.example.ds_project.repository.PaymentRepository;
 import com.example.ds_project.timesync.ClockSynchronizationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,6 +55,8 @@ public class PaymentService {
         );
         
         Payment saved = repository.save(newPayment);
+        return saved;
+    }
 
     public void processPayment(PaymentEvent event) {
         log.info("Processing payment {}", event.paymentId());
@@ -79,6 +86,10 @@ public class PaymentService {
 
     public List<Payment> getAllPayments() {
         return repository.findAll();
+    }
+
+    public long getCount() {
+        return repository.count();
     }
 
     /**
