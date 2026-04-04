@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
  * Core NTP-style clock synchronization service.
@@ -223,7 +224,7 @@ public class ClockSynchronizationService {
                 String json = new String(Files.readAllBytes(Paths.get(metadataPath)));
                 ConcurrentHashMap<String, ClockMetadata> loaded = objectMapper.readValue(
                         json,
-                        ConcurrentHashMap.class
+                        new TypeReference<ConcurrentHashMap<String, ClockMetadata>>() {}
                 );
                 nodeOffsets.putAll(loaded);
                 log.info("Clock metadata loaded from disk: {} nodes", nodeOffsets.size());
