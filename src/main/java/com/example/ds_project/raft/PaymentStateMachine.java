@@ -6,7 +6,6 @@ import com.example.ds_project.timesync.RaftLogReorderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -38,7 +37,8 @@ public class PaymentStateMachine {
         this.reorderService = reorderService;
     }
 
-    @Scheduled(fixedDelay = 200) // Periodically check for new committed entries
+    // Temporarily Disabled for Milestone 1 (Pure Kafka Evaluation)
+    // @Scheduled(fixedDelay = 200) 
     public void applyCommittedEntries() {
         long commitIndex = raftNode.getCommitIndex();
         long lastApplied = raftNode.getLastApplied();
@@ -71,6 +71,13 @@ public class PaymentStateMachine {
         try {
             // Reconstruct the payment from the JSON data stored in the Raft log
             Payment payment = objectMapper.readValue(entry.getPayload(), Payment.class);
+            
+            // Deduplication: Check if this payment ID has already been applied to the state machine
+            if (repository.findById(payment.getId()).isPresent()) {
+                log.warn("Cluster Deduplication: Payment {} already exists in state machine (Log Index: {}). Skipping.", 
+                        payment.getId(), entry.getIndex());
+                return;
+            }
             
             // Persist to the local ledger (State Machine)
             repository.save(payment);

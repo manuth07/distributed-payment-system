@@ -1,6 +1,6 @@
 package com.example.ds_project.service;
 
-import com.example.ds_project.config.NodeConfig;
+import com.example.ds_project.kafka.PaymentEvent;
 import com.example.ds_project.model.Payment;
 import com.example.ds_project.repository.PaymentRepository;
 import com.example.ds_project.timesync.ClockSynchronizationService;
@@ -13,11 +13,15 @@ import java.util.UUID;
 
 @Service
 public class PaymentService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final PaymentRepository repository;
     private final NodeConfig nodeConfig;
     private final ReplicationService replicationService;
     private final ClockSynchronizationService clockSyncService;  // Phase 3b: Time Synchronization
 
+    @Value("${server.port}")
+    private String serverPort;
 
     public PaymentService(PaymentRepository repository, NodeConfig nodeConfig, 
                          ReplicationService replicationService,
@@ -47,12 +51,33 @@ public class PaymentService {
         
         Payment saved = repository.save(newPayment);
 
-        // Trigger replication
-        replicationService.replicateToOtherNodes(saved);
+    public void processPayment(PaymentEvent event) {
+        log.info("Processing payment {}", event.paymentId());
 
-        return saved;
+        try {
+            // Task 2: Simulate processing
+            Thread.sleep(75);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // Create Payment and set status
+        Payment payment = new Payment(
+                event.paymentId().toString(),
+                "node-" + serverPort,
+                event.amount(),
+                "SUCCESS",
+                LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC)
+        );
+
+        // Task 3: ALWAYS save after processing
+        repository.save(payment);
+
+        log.info("Payment {} processed successfully", event.paymentId());
+        log.info("Payment {} saved in node {}", event.paymentId(), serverPort);
     }
-    public List<Payment> getAllPayments(){
+
+    public List<Payment> getAllPayments() {
         return repository.findAll();
     }
 
