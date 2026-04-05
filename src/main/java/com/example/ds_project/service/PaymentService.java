@@ -76,11 +76,13 @@ public class PaymentService {
                 "SUCCESS",
                 LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC)
         );
+        // Set userId from the Kafka event
+        payment.setUserId(event.userId());
 
         // Task 3: ALWAYS save after processing
         repository.save(payment);
 
-        log.info("Payment {} processed successfully", event.paymentId());
+        log.info("Payment {} processed successfully for user {}", event.paymentId(), event.userId());
         log.info("Payment {} saved in node {}", event.paymentId(), serverPort);
     }
 
@@ -122,5 +124,13 @@ public class PaymentService {
      */
     public java.util.Map<String, Object> getPaymentStatistics() {
         return repository.getTimestampStatistics();
+    }
+
+    /**
+     * Retrieve transaction history for a specific user from this node's local repository.
+     * Returns payments sorted by correctedTimestamp descending (newest first).
+     */
+    public List<Payment> getTransactionsByUserId(String userId) {
+        return repository.findByUserIdOrderByCorrectedTimestampDesc(userId);
     }
 }

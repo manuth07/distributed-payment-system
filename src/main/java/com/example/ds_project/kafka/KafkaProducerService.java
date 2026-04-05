@@ -42,7 +42,7 @@ public class KafkaProducerService {
         this.clockSyncService = clockSyncService;
     }
 
-    public PaymentResponse publishPayment(BigDecimal amount) {
+    public PaymentResponse publishPayment(BigDecimal amount, String userId) {
         UUID paymentId = UUID.randomUUID();
         long rawTimestamp = System.currentTimeMillis();
         
@@ -55,11 +55,12 @@ public class KafkaProducerService {
         
         PaymentEvent event = new PaymentEvent(
                 paymentId,
+                userId,                          // <- USER IDENTITY
                 amount,
-                correctedTimestamp,      // <- CORRECTED TIMESTAMP
+                correctedTimestamp,              // <- CORRECTED TIMESTAMP
                 "PENDING",
-                clockOffset,             // <- AUDIT TRAIL: offset applied
-                nodeId                   // <- AUDIT TRAIL: publishing node
+                clockOffset,                     // <- AUDIT TRAIL: offset applied
+                nodeId                           // <- AUDIT TRAIL: publishing node
         );
 
         String raftStatus = "PENDING";

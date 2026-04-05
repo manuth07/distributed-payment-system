@@ -15,6 +15,7 @@ import java.util.UUID;
  */
 public class Payment {
     private String id;
+    private String userId;
     private String nodeId;
     private BigDecimal amount;
     private String status;
@@ -32,6 +33,7 @@ public class Payment {
      */
     public Payment(String id, String nodeId, BigDecimal amount, String status, LocalDateTime timestamp) {
         this.id = id;
+        this.userId = "anonymous";
         this.nodeId = nodeId;
         this.amount = amount;
         this.status = status;
@@ -46,6 +48,7 @@ public class Payment {
      */
     public Payment(BigDecimal amount, String nodeId) {
         this.id = UUID.randomUUID().toString();
+        this.userId = "anonymous";
         this.amount = amount;
         this.status = "SUCCESS";
         this.timestamp = LocalDateTime.now();
@@ -63,6 +66,25 @@ public class Payment {
                    LocalDateTime timestamp, long correctedTimestamp, 
                    long clockOffsetAtCreation, String publishingNodeId) {
         this.id = id;
+        this.userId = "anonymous";
+        this.nodeId = nodeId;
+        this.amount = amount;
+        this.status = status;
+        this.timestamp = timestamp;
+        this.correctedTimestamp = correctedTimestamp;
+        this.clockOffsetAtCreation = clockOffsetAtCreation;
+        this.publishingNodeId = publishingNodeId;
+    }
+
+    /**
+     * Full constructor with userId and Time Synchronization support.
+     * Used when creating payments with known user identity and clock offsets.
+     */
+    public Payment(String id, String userId, String nodeId, BigDecimal amount, String status,
+                   LocalDateTime timestamp, long correctedTimestamp,
+                   long clockOffsetAtCreation, String publishingNodeId) {
+        this.id = id;
+        this.userId = userId;
         this.nodeId = nodeId;
         this.amount = amount;
         this.status = status;
@@ -75,6 +97,9 @@ public class Payment {
     // Getters
     public String getId() {
         return id;
+    }
+    public String getUserId() {
+        return userId;
     }
     public BigDecimal getAmount() {
         return amount;
@@ -109,5 +134,8 @@ public class Payment {
     }
     public void setPublishingNodeId(String publishingNodeId) {
         this.publishingNodeId = publishingNodeId;
+    }
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }
