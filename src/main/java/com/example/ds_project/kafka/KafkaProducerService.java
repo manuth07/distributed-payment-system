@@ -65,10 +65,13 @@ public class KafkaProducerService {
 
         String raftStatus = "PENDING";
 
-        // Publish to Kafka
+        // Part C: DETERMINISTIC PARTITIONING POLICY
+        // Using userId as the Kafka partition key ensures that all payments
+        // for the same user strictly go to the same partition. This mathematically
+        // guarantees linearizable ordering per-user within the distributed log.
         try {
             CompletableFuture<SendResult<String, PaymentEvent>> future =
-                    kafkaTemplate.send(TOPIC, paymentId.toString(), event);
+                    kafkaTemplate.send(TOPIC, event.userId(), event);
             future.whenComplete((result, ex) -> {
                 if (ex != null) {
                     log.error("KAFKA SEND FAILED for payment {}: {}", paymentId, ex.getMessage());

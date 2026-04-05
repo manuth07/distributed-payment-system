@@ -54,37 +54,68 @@ public class PaymentService {
                 nodeConfig.getNodeId()                // This node published it
         );
         
-        Payment saved = repository.save(newPayment);
-        return saved;
+        return newPayment;
     }
 
-    public void processPayment(PaymentEvent event) {
-        log.info("Processing payment {}", event.paymentId());
+    /**
+     * Part A & F: CUSTOM AGREEMENT / MATERIALIZATION POLICY
+     * 
+     * This method acts as the local validation and acceptance pipeline.
+     * We do NOT blindly trust the network. We explicitly validate the event before
+     * accepting it into our local materialized view.
+     * 
+     * @param event The raw Kafka event
+     * @param partition The authoritative storage partition index
+     * @param offset The chronological append-only offset index
+     */
+    public void processAndCommitPayment(PaymentEvent event, int partition, long offset) {
+        log.info("Vaildating candidate payment {}", event.paymentId());
+
+        // 1. Part A: Integrity Validation
+        if (event.amount() == null || event.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("Agreement Policy Rejected: Payment {} has invalid amount {}", event.paymentId(), event.amount());
+            return;
+        }
+
+        // 2. Part D: Idempotency / Deduplication Policy
+        // Using paymentId as the canonical idempotency key
+        if (repository.findById(event.paymentId().toString()).isPresent()) {
+            log.info("Idempotency Policy Triggered: Payment {} already exists. Skipping duplicate replay.", event.paymentId());
+            return;
+        }
 
         try {
-            // Task 2: Simulate processing
+            // Processing simulation
             Thread.sleep(75);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
 
-        // Create Payment and set status
+        // 3. Part B & F: Materialization and Indexing Binding
         Payment payment = new Payment(
                 event.paymentId().toString(),
+                event.userId(),
                 "node-" + serverPort,
                 event.amount(),
                 "SUCCESS",
-                LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC)
+                LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC),
+                event.timestamp(),
+                event.clockOffsetApplied(),
+                event.publishingNodeId()
         );
-        // Set userId from the Kafka event
-        payment.setUserId(event.userId());
+        
+        // Explicitly bind the authoritative storage index to the local view
+        payment.setKafkaPartition(partition);
+        payment.setKafkaOffset(offset);
 
-        // Task 3: ALWAYS save after processing
+        // 4. Local Commit
         repository.save(payment);
 
-        log.info("Payment {} processed successfully for user {}", event.paymentId(), event.userId());
-        log.info("Payment {} saved in node {}", event.paymentId(), serverPort);
+        log.info("Materialization Complete: Payment {} strictly indexed at partition-{} offset-{}", 
+                event.paymentId(), partition, offset);
     }
+
+
 
     public List<Payment> getAllPayments() {
         return repository.findAll();

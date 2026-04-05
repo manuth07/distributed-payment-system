@@ -25,6 +25,12 @@ public class Payment {
     private long correctedTimestamp;       // Epoch millis with offset applied
     private long clockOffsetAtCreation;    // Offset applied at creation time (ms)
     private String publishingNodeId;       // Node that originally published payment
+    
+    // Part B: Custom Indexing Policy
+    // Kafka partition + offset serve as the definitive authoritative storage index
+    // correctedTimestamp acts as a logical application-level ordering aid
+    private int kafkaPartition = -1;
+    private long kafkaOffset = -1;
 
     public Payment() {} // Default for JSON
 
@@ -125,6 +131,14 @@ public class Payment {
         return publishingNodeId;
     }
     
+    // Part B: Kafka Indexing Metadata Getters
+    public int getKafkaPartition() {
+        return kafkaPartition;
+    }
+    public long getKafkaOffset() {
+        return kafkaOffset;
+    }
+    
     // Setters for deserialization and updates
     public void setCorrectedTimestamp(long correctedTimestamp) {
         this.correctedTimestamp = correctedTimestamp;
@@ -137,5 +151,13 @@ public class Payment {
     }
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+    
+    // Part B: Kafka Indexing Metadata Setters
+    public void setKafkaPartition(int kafkaPartition) {
+        this.kafkaPartition = kafkaPartition;
+    }
+    public void setKafkaOffset(long kafkaOffset) {
+        this.kafkaOffset = kafkaOffset;
     }
 }

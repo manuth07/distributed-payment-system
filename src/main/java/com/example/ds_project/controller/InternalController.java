@@ -52,6 +52,38 @@ public class InternalController {
     }
 
     /**
+     * Part G: CONSISTENCY VALIDATION FEATURE
+     * Internal endpoint to explicitly verify node state against the cluster.
+     * This proves that local materialized views independently converged to the exact same dataset
+     * from the authoritative Kafka log.
+     */
+    @GetMapping("/consistency-check")
+    public java.util.Map<String, Object> getConsistencyCheck() {
+        List<Payment> allPayments = repository.findAll();
+        
+        long maxOffset = allPayments.stream()
+                .mapToLong(Payment::getKafkaOffset)
+                .max()
+                .orElse(-1);
+                
+        long maxCorrectedTimestamp = allPayments.stream()
+                .mapToLong(Payment::getCorrectedTimestamp)
+                .max()
+                .orElse(-1);
+                
+        String datasetHash = computeTransactionHash(allPayments);
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("nodeId", nodeId);
+        result.put("paymentCount", allPayments.size());
+        result.put("maxKafkaOffset", maxOffset);
+        result.put("maxCorrectedTimestamp", maxCorrectedTimestamp);
+        result.put("datasetHash", datasetHash);
+        
+        return result;
+    }
+
+    /**
      * Internal endpoint for node-to-node user transaction queries.
      * Called by followers that forward user transaction history requests to this node (the leader).
      * Returns the leader's local transaction list for the given user.

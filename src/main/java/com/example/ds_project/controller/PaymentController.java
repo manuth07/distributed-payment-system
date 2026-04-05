@@ -130,6 +130,15 @@ public class PaymentController {
         // Leader info
         boolean isLeader = raftNode.getState() == RaftNode.State.LEADER;
         status.put("isLeader", isLeader);
+        
+        // Kafka Log Storage Metadata (Part G & J)
+        // Explicitly exposing the materialized state indexing from the authoritative Kafka log
+        long maxOffset = service.getAllPayments().stream()
+                .mapToLong(Payment::getKafkaOffset)
+                .max()
+                .orElse(-1);
+        status.put("paymentCount", service.getCount());
+        status.put("maxKafkaOffset", maxOffset);
 
         // Replication status per peer (only meaningful on leader)
         Map<String, Object> peerStatus = new LinkedHashMap<>();
