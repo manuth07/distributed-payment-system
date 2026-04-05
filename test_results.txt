@@ -1,0 +1,37 @@
+﻿python : Traceback (most recent 
+call last):
+At line:1 char:1
++ python stress_test.py 2>&1 | 
+Out-File -Encoding utf8 
+e:\DS_project\te ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : Not 
+   Specified: (Traceback (most r  
+  ecent call last)::String) [],   
+  RemoteException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+  File 
+"E:\DS_project\stress_test.py", 
+line 97, in <module>
+    print_header("\U0001f680 
+DISTRIBUTED PAYMENT SYSTEM - 
+STRESS & CHAOS TEST")
+  File 
+"E:\DS_project\stress_test.py", 
+line 12, in print_header
+    print(f"\n{'='*60}\n{text}\n{'
+='*60}")
+  File "D:\python 
+sw\Lib\encodings\cp1252.py", line 
+19, in encode
+    return codecs.charmap_encode(i
+nput,self.errors,encoding_table)[0
+]
+           ^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' 
+codec can't encode character 
+'\U0001f680' in position 64: 
+character maps to <undefined>
