@@ -65,6 +65,17 @@ public class PaymentRepository {
     }
 
     /**
+     * Find payments by user ID, sorted by correctedTimestamp descending (newest first).
+     * Used for user transaction history queries.
+     */
+    public List<Payment> findByUserIdOrderByCorrectedTimestampDesc(String userId) {
+        return paymentStore.values().stream()
+                .filter(p -> userId.equals(p.getUserId()))
+                .sorted(Comparator.comparingLong(Payment::getCorrectedTimestamp).reversed())
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Phase 3c: Find payments within a timestamp range (correctedTimestamp).
      * Useful for time-window queries like "payments from the last 5 minutes".
      * 

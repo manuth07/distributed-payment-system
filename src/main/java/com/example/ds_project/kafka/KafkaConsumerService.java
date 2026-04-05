@@ -7,9 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 
 @Service
 public class KafkaConsumerService {
@@ -20,33 +19,30 @@ public class KafkaConsumerService {
     @Value("${server.port}")
     private String serverPort;
 
-    // Deduplication
-    private final Set<UUID> processedPayments = ConcurrentHashMap.newKeySet();
-
     public KafkaConsumerService(PaymentService paymentService) {
         this.paymentService = paymentService;
     }
 
     /**
-     * Kafka Consumer — ALL nodes process independently.
-     * NO leader check. NO Raft dependency.
-     * Raft runs in parallel for coordination only.
+     * Part E: REPLAY & RECOVERY LOGIC
+     * Using a dynamic groupId = "${spring.kafka.consumer.group-id}" instead of a fixed string
+     * means each node constitutes its own independent consumer group.
+     * With auto-offset-reset=earliest, restarting a node naturally forces it to replay
+     * the entire Kafka log and mathematically recover its materialized view from scratch.
      */
-    @KafkaListener(topics = "payments", groupId = "payment-group")
-    public void consume(PaymentEvent event) {
+    @KafkaListener(topics = "payments", groupId = "${spring.kafka.consumer.group-id}")
+    public void consume(PaymentEvent event,
+                        @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+                        @Header(KafkaHeaders.OFFSET) long offset) {
         try {
-            // Deduplication
-            if (!processedPayments.add(event.paymentId())) {
-                log.debug("Duplicate payment {} ignored on node {}", event.paymentId(), serverPort);
-                return;
-            }
+            // Part A: Custom Agreement Pipeline Kickoff
+            log.info("Node {} received event {} [partition={}, offset={}]", 
+                    serverPort, event.paymentId(), partition, offset);
 
-            log.info("Node {} consumed payment {} (amount={})", serverPort, event.paymentId(), event.amount());
+            // Process and store — passing to custom acceptance layer
+            paymentService.processAndCommitPayment(event, partition, offset);
 
-            // Process and store — every node does this independently
-            paymentService.processPayment(event);
-
-            log.info("Node {} completed pipeline for payment {}", serverPort, event.paymentId());
+            log.info("Node {} successfully applied payment {}", serverPort, event.paymentId());
         } catch (Exception e) {
             log.error("CONSUMER ERROR on node {} for payment {}: {}", serverPort, event.paymentId(), e.getMessage(), e);
         }

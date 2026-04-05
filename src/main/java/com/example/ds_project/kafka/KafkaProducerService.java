@@ -42,7 +42,7 @@ public class KafkaProducerService {
         this.clockSyncService = clockSyncService;
     }
 
-    public PaymentResponse publishPayment(BigDecimal amount) {
+    public PaymentResponse publishPayment(BigDecimal amount, String userId) {
         UUID paymentId = UUID.randomUUID();
         long rawTimestamp = System.currentTimeMillis();
         
@@ -55,19 +55,23 @@ public class KafkaProducerService {
         
         PaymentEvent event = new PaymentEvent(
                 paymentId,
+                userId,                          // <- USER IDENTITY
                 amount,
-                correctedTimestamp,      // <- CORRECTED TIMESTAMP
+                correctedTimestamp,              // <- CORRECTED TIMESTAMP
                 "PENDING",
-                clockOffset,             // <- AUDIT TRAIL: offset applied
-                nodeId                   // <- AUDIT TRAIL: publishing node
+                clockOffset,                     // <- AUDIT TRAIL: offset applied
+                nodeId                           // <- AUDIT TRAIL: publishing node
         );
 
         String raftStatus = "PENDING";
 
-        // Publish to Kafka
+        // Part C: DETERMINISTIC PARTITIONING POLICY
+        // Using userId as the Kafka partition key ensures that all payments
+        // for the same user strictly go to the same partition. This mathematically
+        // guarantees linearizable ordering per-user within the distributed log.
         try {
             CompletableFuture<SendResult<String, PaymentEvent>> future =
-                    kafkaTemplate.send(TOPIC, paymentId.toString(), event);
+                    kafkaTemplate.send(TOPIC, event.userId(), event);
             future.whenComplete((result, ex) -> {
                 if (ex != null) {
                     log.error("KAFKA SEND FAILED for payment {}: {}", paymentId, ex.getMessage());
