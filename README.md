@@ -12,37 +12,132 @@ This repository contains a prototype for a simplified **Fault-Tolerant Distribut
 
 ## 🚀 How to Run (Getting Started)
 
-Follow these steps to get the entire 10-container system running on your local machine:
-
-### 1. Prerequisites
-- **Java 17** (The project is locked to JDK 17).
-- **Maven 3.x**.
-- **Docker Desktop** (Make sure it is running).
-
-### 2. Build the Application
-Open your terminal in the root directory and run:
+### Quick Start (Recommended)
 ```bash
-mvn clean package -DskipTests
+# Clean and rebuild
+mvn clean compile
+
+# Start all services (includes Docker build)
+docker-compose up -d --build
+
+# Wait 15-20 seconds, then open dashboard in browser
+# http://localhost:8080/dashboard.html
 ```
 
-### 3. Launch the Cluster
-Use Docker Compose to start all 10 services (Zookeeper, Kafka, Nginx, and 5 Nodes):
+### Prerequisites
+- **Java 17** (locked to JDK 17 via pom.xml)
+- **Maven 3.6+**
+- **Docker Desktop** (running)
+
+### Step-by-Step Setup
+
+**1. Build the Application**
+```bash
+mvn clean compile
+```
+
+**2. Build & Launch Cluster (10 containers)**
 ```bash
 docker-compose up -d --build
 ```
-*Wait ~1 minute for all nodes to start and elect a Raft leader.*
+Wait ~15-20 seconds for all services to start and leader election complete.
+
+**3. Verify Startup**
+```bash
+# Check all containers running
+docker-compose ps
+
+# Should show: 5 nodes, 3 ZooKeepers, Kafka, nginx lb
+```
+
+**4. Access the System**
+
+| Component | URL | Purpose |
+|-----------|-----|---------|
+| **Dashboard** | http://localhost:8080/dashboard.html | Interactive control panel |
+| **Direct Node** | http://localhost:8081/dashboard.html | Direct access to node1 |
+| **Swagger UI** | http://localhost:8080/swagger-ui.html | Full API documentation |
+| **Health Check** | http://localhost:8080/actuator/health | System status |
 
 ---
 
-## 🧪 Testing the Pipeline
+## 📊 Dashboard Features
 
-### Simple Postman Check
-- **Endpoint**: `POST http://localhost:8080/payments?amount=500`
-- **What happens**: The Load Balancer hits a node, which drops the payment into Kafka. You'll get an immediate `PENDING` response with cluster metadata (Leader, Quorum reached, etc.).
+**Real-time Monitoring:**
+- 📊 Cluster status (current node, Raft state, term, quorum)
+- 🔗 Peer replication tracking (nextIndex, matchIndex)
+- ❤️ Leader/follower state visualization
 
-### Verify Consistency
-- **Snapshot Status**: `GET http://localhost:8080/payments/cluster-status` (See Raft log size and commit index).
-- **Finalized Ledger**: `GET http://localhost:8080/payments` (See all payments that successfully reached consensus).
+**Interactive Controls:**
+- 💳 Submit test payments immediately
+- ⚙️ Kill/restart individual nodes
+- 🧪 Fault tolerance demo walkthrough
+- ⚡ Stress test (10 rapid payments)
+- 📈 Raft consensus details (term, state, commit index)
+- ⏱️ Time synchronization metrics
+
+**API Exploration:**
+- View Swagger docs with all endpoints
+- Check system health status
+- Test stress scenarios
+
+---
+
+## 🧪 Testing & Demos
+
+### Option 1: Web Dashboard (Easiest)
+1. Open http://localhost:8080/dashboard.html
+2. Submit a payment → See it replicated live
+3. Click a Node button → Kill the leader
+4. Watch new leader elected (term increases)
+5. Submit another payment → Still works!
+6. Click "Get Raft State" → See new leader info
+7. Run stress test → 10 concurrent payments
+
+### Option 2: API Direct Testing
+```bash
+# Submit a payment
+curl -X POST "http://localhost:8080/payments?amount=100&userId=user1"
+
+# Get cluster status
+curl "http://localhost:8080/payments/cluster-status"
+
+# See all payments
+curl "http://localhost:8080/payments"
+
+# Get Raft status
+curl "http://localhost:8080/raft/status"
+```
+
+### Manual Node Testing
+```bash
+# Kill a node
+docker stop node1
+
+# View logs
+docker logs node1
+
+# Restart it
+docker start node1
+```
+
+---
+
+## 🧹 Clean Up & Reset
+
+**Stop the cluster:**
+```bash
+docker-compose down
+```
+
+**Full reset (delete all state/payments):**
+```bash
+# Remove persistent data
+Remove-Item -Path data\node* -Recurse -Force
+
+# Restart
+docker-compose up -d --build
+```
 
 ---
 

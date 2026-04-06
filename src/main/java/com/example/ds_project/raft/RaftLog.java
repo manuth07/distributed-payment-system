@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Collections;
+import java.util.Set;
 
 @Component
 public class RaftLog {
@@ -22,6 +24,9 @@ public class RaftLog {
 
     private final CopyOnWriteArrayList<LogEntry> entries = new CopyOnWriteArrayList<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    // Phase 2 Optimization: O(1) deduplication index instead of O(N) log scan
+    private final Set<String> paymentIdIndex = Collections.synchronizedSet(new java.util.HashSet<>());
 
     @Value("${raft.log.file}")
     private String logFilePath;
@@ -51,9 +56,13 @@ public class RaftLog {
                         log.warn("Gap identified in log at index {} vs size {}", entry.getIndex(), entries.size());
                         entries.add(entry);
                     }
+                    // Populate paymentIdIndex for O(1) deduplication
+                    if (entry.getPaymentId() != null) {
+                        paymentIdIndex.add(entry.getPaymentId());
+                    }
                 }
             }
-            log.info("Loaded {} log entries from disk.", entries.size());
+            log.info("Loaded {} log entries from disk ({} payment IDs indexed).", entries.size(), paymentIdIndex.size());
         } catch (IOException e) {
             log.error("Failed to load Raft log from disk", e);
         }
@@ -61,6 +70,10 @@ public class RaftLog {
 
     public synchronized void appendEntry(LogEntry entry) {
         entries.add(entry);
+        // Phase 2 Optimization: Maintain O(1) deduplication index
+        if (entry.getPaymentId() != null) {
+            paymentIdIndex.add(entry.getPaymentId());
+        }
         flushEntryToDisk(entry);
     }
 
@@ -76,9 +89,25 @@ public class RaftLog {
     // Raft paper §5.3: log truncation when followers have conflicting entries
     public synchronized void truncateFromIndex(long index) {
         if (index >= 0 && index < entries.size()) {
+            // Rebuild paymentIdIndex after truncation
+            paymentIdIndex.clear();
             entries.subList((int) index, entries.size()).clear();
+            for (LogEntry entry : entries) {
+                if (entry.getPaymentId() != null) {
+                    paymentIdIndex.add(entry.getPaymentId());
+                }
+            }
             rewriteLogFile();
         }
+    }
+
+    /**
+     * Phase 2 Optimization: O(1) deduplication check instead of O(N) log scan
+     * @param paymentId the payment ID to check
+     * @return true if payment already exists in the log
+     */
+    public boolean containsPayment(String paymentId) {
+        return paymentIdIndex.contains(paymentId);
     }
 
     private void flushEntryToDisk(LogEntry entry) {

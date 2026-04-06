@@ -9,6 +9,7 @@ import java.util.UUID;
  */
 public record PaymentEvent(
     UUID paymentId,              // Unique payment identifier
+    String userId,               // User who initiated the payment
     BigDecimal amount,           // Payment amount
     long timestamp,              // Corrected timestamp (epoch ms with offset applied)
     String status,               // Status: PENDING, SUCCESS, FAILED
@@ -20,6 +21,6 @@ public record PaymentEvent(
      * Used when offset correction is not needed (e.g., in tests).
      */
     public PaymentEvent(UUID paymentId, BigDecimal amount, long timestamp, String status) {
-        this(paymentId, amount, timestamp, status, 0, "unknown");
+        this(paymentId, "anonymous", amount, timestamp, status, 0, "unknown");
     }
 }

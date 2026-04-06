@@ -6,6 +6,7 @@ import com.example.ds_project.timesync.RaftLogReorderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -35,10 +36,11 @@ public class PaymentStateMachine {
         this.raftLog = raftLog;
         this.repository = repository;
         this.reorderService = reorderService;
+        this.objectMapper.findAndRegisterModules(); // Support java.time
     }
 
-    // Temporarily Disabled for Milestone 1 (Pure Kafka Evaluation)
-    // @Scheduled(fixedDelay = 200) 
+    // Re-enabled for Raft authoritative storage
+    @Scheduled(fixedDelay = 200) 
     public void applyCommittedEntries() {
         long commitIndex = raftNode.getCommitIndex();
         long lastApplied = raftNode.getLastApplied();

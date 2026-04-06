@@ -42,7 +42,7 @@ public class KafkaProducerService {
         this.clockSyncService = clockSyncService;
     }
 
-    public PaymentResponse publishPayment(BigDecimal amount) {
+    public PaymentResponse publishPayment(BigDecimal amount, String userId) {
         UUID paymentId = UUID.randomUUID();
         long rawTimestamp = System.currentTimeMillis();
         
@@ -55,11 +55,12 @@ public class KafkaProducerService {
         
         PaymentEvent event = new PaymentEvent(
                 paymentId,
+                userId,                          // <- USER IDENTITY
                 amount,
-                correctedTimestamp,      // <- CORRECTED TIMESTAMP
+                correctedTimestamp,              // <- CORRECTED TIMESTAMP
                 "PENDING",
-                clockOffset,             // <- AUDIT TRAIL: offset applied
-                nodeId                   // <- AUDIT TRAIL: publishing node
+                clockOffset,                     // <- AUDIT TRAIL: offset applied
+                nodeId                           // <- AUDIT TRAIL: publishing node
         );
 
         String raftStatus = "PENDING";
@@ -104,5 +105,24 @@ public class KafkaProducerService {
                 .receivingNode(nodeId)
                 .clockOffsetApplied(clockOffset)     // <- NEW: track offset in response
                 .build();
+    }
+    public void publishAuditPayment(PaymentResponse response) {
+        // Phase 8: Kafka is now purely secondary. We publish the successfully committed event 
+        // to a new topic (or same topic) for downstreams, audit, analytics.
+        PaymentEvent event = new PaymentEvent(
+                response.getPaymentId(),
+                "anonymous", // We'd need userId, but let's assume downstream needs are minimal for now
+                response.getAmount(),
+                response.getTimestamp(),
+                "COMMITTED",
+                response.getClockOffsetApplied(),
+                nodeId
+        );
+
+        try {
+            kafkaTemplate.send(TOPIC, response.getPaymentId().toString(), event);
+        } catch (Exception e) {
+            log.error("Kafka audit publish failed for payment {}", response.getPaymentId(), e);
+        }
     }
 }

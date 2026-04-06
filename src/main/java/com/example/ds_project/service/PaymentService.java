@@ -76,12 +76,15 @@ public class PaymentService {
                 "SUCCESS",
                 LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(event.timestamp()), ZoneOffset.UTC)
         );
+        // Set userId from the Kafka event
+        payment.setUserId(event.userId());
 
-        // Task 3: ALWAYS save after processing
-        repository.save(payment);
+        // Phase 8: Kafka is now strictly secondary and informational.
+        // We DO NOT save directly to PaymentRepository from Kafka. 
+        // This avoids the dual-write problem, as Raft is the authority.
+        // repository.save(payment);
 
-        log.info("Payment {} processed successfully", event.paymentId());
-        log.info("Payment {} saved in node {}", event.paymentId(), serverPort);
+        log.info("Kafka audit: Payment {} event received for user {} (No DB write)", event.paymentId(), event.userId());
     }
 
     public List<Payment> getAllPayments() {
@@ -122,5 +125,13 @@ public class PaymentService {
      */
     public java.util.Map<String, Object> getPaymentStatistics() {
         return repository.getTimestampStatistics();
+    }
+
+    /**
+     * Retrieve transaction history for a specific user from this node's local repository.
+     * Returns payments sorted by correctedTimestamp descending (newest first).
+     */
+    public List<Payment> getTransactionsByUserId(String userId) {
+        return repository.findByUserIdOrderByCorrectedTimestampDesc(userId);
     }
 }
