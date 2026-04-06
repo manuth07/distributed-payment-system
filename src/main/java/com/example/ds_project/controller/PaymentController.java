@@ -86,9 +86,9 @@ public class PaymentController {
             @RequestParam BigDecimal amount,
             @RequestParam(required = false, defaultValue = "anonymous") String userId) {
         
-        // ── Follower path — forward to leader ─────────────────────────
-        if (!leaderState.isLeader()) {
-            return forwardPaymentToLeader(amount, userId);
+        // ── Follower path — forward to Raft leader ─────────────────────────
+        if (raftNode.getState() != RaftNode.State.LEADER) {
+            return forwardPaymentToRaftLeader(amount, userId);
         }
 
         // ── Leader path — authoritative Raft write ────────────────────
@@ -109,11 +109,11 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
-    private ResponseEntity<PaymentResponse> forwardPaymentToLeader(BigDecimal amount, String userId) {
-        String leaderUrl = leaderState.getLeaderUrl();
+    private ResponseEntity<PaymentResponse> forwardPaymentToRaftLeader(BigDecimal amount, String userId) {
+        String leaderUrl = findRaftLeaderUrl();
         if (leaderUrl == null || leaderUrl.isEmpty()) {
             PaymentResponse errorResp = PaymentResponse.builder()
-                .raftStatus("NO_LEADER")
+                .raftStatus("NO_RAFT_LEADER")
                 .raftLeaderNodeId("unknown")
                 .raftLeaderUrl("unknown")
                 .consensusReached(false)
@@ -122,17 +122,33 @@ public class PaymentController {
         }
 
         try {
-            log.info("Forwarding payment request to leader at {}", leaderUrl);
+            log.info("Forwarding payment request to Raft leader at {}", leaderUrl);
             String url = leaderUrl + "/payments?amount=" + amount + "&userId=" + userId;
-            return restTemplate.postForEntity(url, null, PaymentResponse.class);
+            ResponseEntity<PaymentResponse> resp = restTemplate.postForEntity(url, null, PaymentResponse.class);
+            return ResponseEntity.ok(resp.getBody());
         } catch (Exception e) {
-            log.error("Failed to forward payment to leader", e);
+            log.error("Failed to forward payment to Raft leader", e);
             PaymentResponse errorResp = PaymentResponse.builder()
                 .raftStatus("LEADER_UNREACHABLE")
                 .consensusReached(false)
                 .build();
             return ResponseEntity.status(503).body(errorResp);
         }
+    }
+
+    private String findRaftLeaderUrl() {
+        for (String node : clusterConfig.getAllNodes()) {
+            if (node.equals(nodeUrl)) continue; // skip self since we already know we're not leader
+            try {
+                Map<String, Object> status = restTemplate.getForObject(node + "/raft/status", Map.class);
+                if (status != null && "LEADER".equals(status.get("state"))) {
+                    return node;
+                }
+            } catch (Exception e) {
+                // Ignore unreachable nodes when searching for leader
+            }
+        }
+        return null;
     }
 
     /**

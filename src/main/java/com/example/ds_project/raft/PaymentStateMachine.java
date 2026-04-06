@@ -36,6 +36,7 @@ public class PaymentStateMachine {
         this.raftLog = raftLog;
         this.repository = repository;
         this.reorderService = reorderService;
+        this.objectMapper.findAndRegisterModules(); // Support java.time
     }
 
     // Re-enabled for Raft authoritative storage
