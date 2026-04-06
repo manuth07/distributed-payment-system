@@ -10,6 +10,7 @@ import com.example.ds_project.raft.RaftLog;
 import com.example.ds_project.raft.RaftNode;
 import com.example.ds_project.raft.LogEntry;
 import com.example.ds_project.service.PaymentService;
+import com.example.ds_project.service.PaymentConsensusService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,7 @@ public class PaymentController {
     private static final long COMMIT_INDEX_STALENESS_THRESHOLD = 1;
 
     private final PaymentService service;
+    private final PaymentConsensusService paymentConsensusService;
     private final KafkaProducerService kafkaProducerService;
     private final RaftNode raftNode;
     private final RaftLog raftLog;
@@ -57,6 +59,7 @@ public class PaymentController {
     private int quorumSize;
 
     public PaymentController(PaymentService service,
+                             PaymentConsensusService paymentConsensusService,
                              KafkaProducerService kafkaProducerService,
                              RaftNode raftNode,
                              RaftLog raftLog,
@@ -64,6 +67,7 @@ public class PaymentController {
                              ClusterConfig clusterConfig,
                              RestTemplate restTemplate) {
         this.service = service;
+        this.paymentConsensusService = paymentConsensusService;
         this.kafkaProducerService = kafkaProducerService;
         this.raftNode = raftNode;
         this.raftLog = raftLog;
@@ -81,8 +85,54 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> makePayment(
             @RequestParam BigDecimal amount,
             @RequestParam(required = false, defaultValue = "anonymous") String userId) {
-        PaymentResponse response = kafkaProducerService.publishPayment(amount, userId);
+        
+        // ── Follower path — forward to leader ─────────────────────────
+        if (!leaderState.isLeader()) {
+            return forwardPaymentToLeader(amount, userId);
+        }
+
+        // ── Leader path — authoritative Raft write ────────────────────
+        PaymentResponse response = paymentConsensusService.appendAndReplicate(amount, userId);
+
+        // Optional Step 8: Kafka is now strictly secondary/audit only
+        if (response.isConsensusReached()) {
+            try {
+                // Post-commit publish for analytics/audit if desired
+                kafkaProducerService.publishAuditPayment(response);
+            } catch (Exception e) {
+                log.warn("Failed to publish audit event to Kafka, but Raft write succeeded", e);
+            }
+        } else {
+            return ResponseEntity.status(503).body(response);
+        }
+
         return ResponseEntity.ok(response);
+    }
+
+    private ResponseEntity<PaymentResponse> forwardPaymentToLeader(BigDecimal amount, String userId) {
+        String leaderUrl = leaderState.getLeaderUrl();
+        if (leaderUrl == null || leaderUrl.isEmpty()) {
+            PaymentResponse errorResp = PaymentResponse.builder()
+                .raftStatus("NO_LEADER")
+                .raftLeaderNodeId("unknown")
+                .raftLeaderUrl("unknown")
+                .consensusReached(false)
+                .build();
+            return ResponseEntity.status(503).body(errorResp);
+        }
+
+        try {
+            log.info("Forwarding payment request to leader at {}", leaderUrl);
+            String url = leaderUrl + "/payments?amount=" + amount + "&userId=" + userId;
+            return restTemplate.postForEntity(url, null, PaymentResponse.class);
+        } catch (Exception e) {
+            log.error("Failed to forward payment to leader", e);
+            PaymentResponse errorResp = PaymentResponse.builder()
+                .raftStatus("LEADER_UNREACHABLE")
+                .consensusReached(false)
+                .build();
+            return ResponseEntity.status(503).body(errorResp);
+        }
     }
 
     /**

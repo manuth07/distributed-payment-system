@@ -1,6 +1,7 @@
 package com.example.ds_project.raft;
 
 import com.example.ds_project.timesync.Timestamped;
+import java.math.BigDecimal;
 
 /**
  * Raft log entry with support for out-of-order reordering (Phase 4).
@@ -13,6 +14,13 @@ public class LogEntry implements Timestamped {
     private String payload;
     private long timestamp;
     private LogStatus status;
+    
+    // Explicit payment fields for Raft-based authoritative storage
+    private String userId;
+    private BigDecimal amount;
+    private long correctedTimestamp;
+    private long clockOffsetAtCreation;
+    private String publishingNodeId;
 
     public enum LogStatus {
         PENDING, COMMITTED, APPLIED
@@ -47,6 +55,20 @@ public class LogEntry implements Timestamped {
 
     public LogStatus getStatus() { return status; }
     public void setStatus(LogStatus status) { this.status = status; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public void setCorrectedTimestamp(long correctedTimestamp) { this.correctedTimestamp = correctedTimestamp; }
+    
+    public long getClockOffsetAtCreation() { return clockOffsetAtCreation; }
+    public void setClockOffsetAtCreation(long clockOffsetAtCreation) { this.clockOffsetAtCreation = clockOffsetAtCreation; }
+
+    public String getPublishingNodeId() { return publishingNodeId; }
+    public void setPublishingNodeId(String publishingNodeId) { this.publishingNodeId = publishingNodeId; }
     
     /**
      * Phase 4: Implement Timestamped interface for out-of-order log reordering.
@@ -56,6 +78,6 @@ public class LogEntry implements Timestamped {
      */
     @Override
     public long getCorrectedTimestamp() {
-        return timestamp;
+        return correctedTimestamp > 0 ? correctedTimestamp : timestamp;
     }
 }
