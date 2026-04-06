@@ -120,4 +120,17 @@ public class PaymentRepository {
     public long count() {
         return paymentStore.size();
     }
+
+    public void deleteAll() {
+        paymentStore.clear();
+    }
+
+    /**
+     * Count payments by payment ID (for deduplication testing)
+     */
+    public long countByPaymentId(String paymentId) {
+        return paymentStore.values().stream()
+                .filter(p -> paymentId.equals(p.getId()))
+                .count();
+    }
 }
