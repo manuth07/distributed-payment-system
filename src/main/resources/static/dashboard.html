@@ -238,6 +238,44 @@
                 <h2>🔗 Peer Replication</h2>
                 <div id="peerStatus" class="peers-grid">Loading...</div>
             </div>
+
+            <!-- Raft Details -->
+            <div class="panel">
+                <h2>📊 Raft Consensus Details</h2>
+                <button onclick="getRaftDetails()" style="margin-bottom: 10px;">Get Raft State</button>
+                <div id="raftDetails" style="margin-top: 10px; font-size: 0.9em;"></div>
+            </div>
+
+            <!-- Time Sync Demo -->
+            <div class="panel">
+                <h2>⏱️ Time Synchronization</h2>
+                <button onclick="getTimeSyncInfo()" style="margin-bottom: 10px;">Get Time Sync Metrics</button>
+                <div id="timeSyncInfo" style="margin-top: 10px; font-size: 0.9em;"></div>
+            </div>
+
+            <!-- Fault Tolerance Test -->
+            <div class="panel full-width">
+                <h2>🧪 Fault Tolerance Demo</h2>
+                <p style="color: #666; margin-bottom: 10px; font-size: 0.9em;">
+                    <strong>Steps:</strong> 1) Kill the current leader node → 2) Watch new leader elected (term increases) → 3) Payments still work → 4) Killed node recovers and catches up
+                </p>
+                <button onclick="demoFaultTolerance()">Start Fault Tolerance Test</button>
+                <div id="ftMsg" style="margin-top: 10px;"></div>
+            </div>
+
+            <!-- API Explorer -->
+            <div class="panel full-width">
+                <h2>🔗 API Explorer & Advanced Demo</h2>
+                <p style="color: #666; margin-bottom: 10px; font-size: 0.9em;">
+                    Explore all available endpoints and test advanced scenarios
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <button onclick="window.open(BASE_URL + '/swagger-ui.html', '_blank')">📖 Swagger UI</button>
+                    <button onclick="window.open(BASE_URL + '/actuator/health', '_blank')">❤️ Health Check</button>
+                    <button onclick="testStressPayments()">⚡ Stress Test (10 payments)</button>
+                </div>
+                <div id="stressMsg" style="margin-top: 10px;"></div>
+            </div>
         </div>
     </div>
 
@@ -417,6 +455,122 @@
             const el = document.getElementById(elementId);
             el.className = `message ${type !== 'info' ? type : ''}`;
             el.textContent = text;
+        }
+
+        function getRaftDetails() {
+            fetch(BASE_URL + '/raft/status')
+                .then(r => r.json())
+                .then(data => {
+                    const html = `
+                        <div class="info-item">
+                            <span class="label">State:</span>
+                            <span class="value">${data.state}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Current Term:</span>
+                            <span class="value">${data.term}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Voted For:</span>
+                            <span class="value">${data.votedFor || 'None'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Commit Index:</span>
+                            <span class="value">${data.commitIndex}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Last Applied:</span>
+                            <span class="value">${data.lastApplied}</span>
+                        </div>
+                    `;
+                    document.getElementById('raftDetails').innerHTML = html;
+                })
+                .catch(e => {
+                    document.getElementById('raftDetails').innerHTML = `<div class="message error">Error: ${e.message}</div>`;
+                });
+        }
+
+        function getTimeSyncInfo() {
+            fetch(BASE_URL + '/timesync/status')
+                .then(r => r.json())
+                .then(data => {
+                    const skswClass = Math.abs(data.clockSkew) > 100 ? 'error' : (Math.abs(data.clockSkew) > 50 ? 'warn' : 'ok');
+                    const html = `
+                        <div class="info-item">
+                            <span class="label">Clock Offset (ms):</span>
+                            <span class="value ${skswClass}">${data.clockOffset || 0}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Clock Skew (ms):</span>
+                            <span class="value ${skswClass}">${data.clockSkew || 0}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Last Sync Time:</span>
+                            <span class="value">${new Date(data.lastSyncTime).toLocaleTimeString() || 'Never'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Sync Age (s):</span>
+                            <span class="value">${data.syncAge || 'N/A'}</span>
+                        </div>
+                    `;
+                    document.getElementById('timeSyncInfo').innerHTML = html;
+                })
+                .catch(e => {
+                    document.getElementById('timeSyncInfo').innerHTML = `<div class="message error">Time sync endpoint not available</div>`;
+                });
+        }
+
+        function demoFaultTolerance() {
+            const msg = document.getElementById('ftMsg');
+            msg.className = 'message';
+            msg.innerHTML = `
+                <strong>Fault Tolerance Demo Steps:</strong><br/>
+                1. Click a Node button above → Select "Kill" to stop leader<br/>
+                2. Watch Replicated Nodes drop temporarily<br/>
+                3. New leader elected (Term increases, State changes to LEADER)<br/>
+                4. Payments continue working despite node down<br/>
+                5. Submit test payment above - should succeed immediately<br/>
+                6. Wait 30s for killed node to auto-recover<br/>
+                7. Watch Replicated Nodes recover to 3/5 or higher<br/>
+                <br/>
+                <strong>Key observations:</strong><br/>
+                • Quorum (3 nodes) elected new leader instantly<br/>
+                • State machine stayed available for payments<br/>
+                • Log replication caught up automatically<br/>
+                • No data loss thanks to Raft consensus
+            `;
+        }
+
+        function testStressPayments() {
+            const msg = document.getElementById('stressMsg');
+            msg.className = 'message';
+            msg.textContent = '⏳ Submitting 10 payments...';
+
+            let success = 0, failed = 0;
+            const baseUserId = `stress-user-${Date.now()}`;
+
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => {
+                    fetch(`${BASE_URL}/payments?amount=${10 + i}&userId=${baseUserId}-${i}`, {method: 'POST'})
+                        .then(r => r.json())
+                        .then(data => {
+                            success++;
+                            if (success + failed === 10) {
+                                msg.className = 'message success';
+                                msg.textContent = `✓ Stress test complete: ${success}/10 successful, ${failed}/10 failed`;
+                                setTimeout(updatePayments, 500);
+                            }
+                        })
+                        .catch(e => {
+                            failed++;
+                            if (success + failed === 10) {
+                                msg.className = failed > 0 ? 'message error' : 'message success';
+                                msg.textContent = `Result: ${success}/10 successful, ${failed}/10 failed`;
+                                setTimeout(updatePayments, 500);
+                            }
+                        });
+                }, i * 100); // Stagger requests by 100ms
+            }
         }
     </script>
 </body>
