@@ -99,6 +99,7 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    restart: always
 
   node2:
     build: .
@@ -123,6 +124,7 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    restart: always
 
   node3:
     build: .
@@ -147,6 +149,7 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    restart: always
 
   node4:
     build: .
@@ -171,6 +174,7 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    restart: always
 
   node5:
     build: .
@@ -195,3 +199,4 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    restart: always
