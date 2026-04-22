@@ -42,7 +42,7 @@
         .btn { flex: 1; padding: 0.5rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; }
         .btn-stop { background: #fee2e2; color: #991b1b; }
         .btn-restart { background: #dcfce7; color: #166534; }
-        .btn-reset { background: #6b7280; color: white; width: auto; padding: 0.5rem 1rem; }
+        .btn-reset { background: #6b7280; color: white; flex: none; width: auto; padding: 0.5rem 10px; font-size: 0.7rem; }
 
         .workspace { display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; }
         @media (max-width: 800px) { .workspace { grid-template-columns: 1fr; } }
@@ -93,7 +93,10 @@
             <div class="panel">
                 <div class="panel-heading">
                     Transaction Journal
-                    <button class="btn btn-reset" onclick="resetData()">Clear Data</button>
+                    <div style="display:flex; gap: 5px;">
+                        <button class="btn btn-reset" style="background:#d97706" onclick="resetClocks()">Reset Clocks</button>
+                        <button class="btn btn-reset" onclick="resetData()">Clear Data</button>
+                    </div>
                 </div>
                 <ul class="payment-list" id="ledger"></ul>
             </div>
@@ -114,34 +117,61 @@
                 } catch (e) { return { i, port: p, online: false }; }
             }));
 
-            renderNodes(results);
+            // Calculate Cluster Skew (Browser-side)
+            const offsets = results.filter(r => r.online).map(r => r.time.clockOffset);
+            const clusterSkew = offsets.length > 0 ? Math.max(...offsets) - Math.min(...offsets) : 0;
+
+            renderNodes(results, clusterSkew);
             const leader = results.find(r => r.online && r.raft.raftState === 'LEADER');
             if (leader) {
                 currentLeaderPort = leader.port;
                 renderLedger(leader.port);
                 renderRepl(leader.raft);
-                document.getElementById('master-state').textContent = `Cluster Healthy • Leader: Node ${leader.i + 1}`;
+                document.getElementById('master-state').innerHTML = `
+                    <span style="color:var(--success)">●</span> Cluster Healthy • 
+                    Leader: Node ${leader.i + 1} (Reference Time) • 
+                    <b>Max Cluster Skew: ${clusterSkew}ms</b>
+                `;
             } else {
                 document.getElementById('master-state').textContent = '⚠️ Election in Progress...';
             }
         }
 
-        function renderNodes(data) {
+        function renderNodes(data, globalSkew) {
             document.getElementById('nodes').innerHTML = data.map(d => `
-                <div class="node-card" style="${!d.online ? 'opacity:0.6' : ''}">
-                    <div class="node-name">Node ${d.i + 1} <span class="status-dot ${d.online ? 'dot-online' : 'dot-offline'}"></span></div>
+                <div class="node-card" style="${!d.online ? 'opacity:0.6' : ''}; border: ${d.online && d.raft.raftState === 'LEADER' ? '2px solid var(--primary)' : '1px solid var(--border)'}">
+                    <div class="node-name">
+                        Node ${d.i + 1} ${d.online && d.raft.raftState === 'LEADER' ? '👑' : ''}
+                        <span class="status-dot ${d.online ? 'dot-online' : 'dot-offline'}"></span>
+                    </div>
                     <div class="node-metrics">
-                        <div class="metric-row"><span>Raft State:</span><span class="metric-val">${d.online ? d.raft.raftState : 'OFFLINE'}</span></div>
-                        <div class="metric-row"><span>Node Time:</span><span class="metric-val">${d.online ? new Date(Date.now() + d.time.clockOffset).toLocaleTimeString() : '--:--:--'}</span></div>
-                        <div class="metric-row"><span>Offset:</span><span class="metric-val">${d.online ? d.time.clockOffset + 'ms' : '-'}</span></div>
-                        <div class="metric-row"><span>Skew:</span><span class="metric-val">${d.online ? d.time.estimatedSkew + 'ms' : '-'}</span></div>
+                        <div class="metric-row"><span>Raft State:</span><span class="metric-val" style="color:${d.online && d.raft.raftState === 'LEADER' ? 'var(--primary)' : ''}">${d.online ? d.raft.raftState : 'OFFLINE'}</span></div>
+                        <div class="metric-row"><span>${d.online && d.raft.raftState === 'LEADER' ? 'Reference Time:' : 'Sync Time:'}</span><span class="metric-val">${d.online ? new Date(Date.now() + d.time.clockOffset).toLocaleTimeString() : '--:--:--'}</span></div>
+                        <div class="metric-row"><span>Clock Offset:</span><span class="metric-val" style="color:${Math.abs(d.time?.clockOffset) > 1000 ? 'var(--danger)' : ''}">${d.online ? d.time.clockOffset + 'ms' : '-'}</span></div>
                     </div>
                     <div class="btn-group">
-                        <button class="btn btn-restart" onclick="act(${d.port})">Restart</button>
-                        <button class="btn btn-stop" onclick="act(${d.port})">Stop</button>
+                        <button class="btn btn-restart" onclick="setSkew(${d.port})" ${!d.online ? 'disabled' : ''}>Skew</button>
+                        <button class="btn btn-stop" onclick="act(${d.port})" ${!d.online ? 'disabled' : ''}>Stop</button>
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function resetClocks() {
+            if (!confirm("Reset ALL clock simulations and offsets?")) return;
+            toast("⏰ Resetting clocks...", "#d97706");
+            await Promise.all(PORTS.map(p => fetch(`http://localhost:${p}/admin/reset-clocks`, { method: 'POST' }).catch(e => {})));
+            tick();
+        }
+
+        async function setSkew(port) {
+            const skew = prompt("Enter simulated clock skew in milliseconds (e.g., 5000 for 5s fast, -5000 for 5s slow):", "0");
+            if (skew === null) return;
+            toast("⏰ Injecting skew...", "#d97706");
+            try {
+                await fetch(`http://localhost:${port}/admin/simulate-skew?skewMs=${skew}`, { method: 'POST' });
+                tick();
+            } catch(e) { toast("❌ Failed to set skew", "#dc2626"); }
         }
 
         async function renderLedger(port) {

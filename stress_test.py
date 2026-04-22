@@ -149,6 +149,7 @@ def check_raft_leader():
             print(f"   {node}: Unreachable / DOWN")
     if not leader_found:
         print("   ⚠️  WARNING: NO LEADER DETECTED!")
+    return leader_found
 
 def reset_cluster_data():
     print_header("🧹 CLEANING UP PREVIOUS TEST DATA")
@@ -169,15 +170,12 @@ if __name__ == "__main__":
     # Pre-flight check with retries
     max_retries = 3
     connected = False
-    
     for attempt in range(1, max_retries + 1):
         print(f"🔍 Connection attempt {attempt}/{max_retries}...")
         if check_connection(LB_URL):
             print("✅ Load Balancer (Port 8080) is UP.")
             connected = True
             break
-        
-        # Fallback to direct nodes
         for name, port in NODES.items():
             if check_connection(f"http://localhost:{port}/payments"):
                 API_URL = f"http://localhost:{port}/payments"
@@ -185,7 +183,6 @@ if __name__ == "__main__":
                 connected = True
                 break
         if connected: break
-        
         if attempt < max_retries:
             print("⏳ Cluster not fully ready yet. Waiting 10 seconds...")
             time.sleep(10)
@@ -194,26 +191,20 @@ if __name__ == "__main__":
         print("❌ ERROR: No nodes are reachable. Please ensure Docker is running and ports are mapped.")
         exit(1)
 
-    # Reset data for a clean test run
+    # 1. Reset data for a clean test run
     reset_cluster_data()
-
-    # Get baseline count (should be 0)
     initial_count = verify_ledgers()
 
-    # ─── PHASE 1: Baseline Stress Test ────────────────────────
+    # 2. PHASE 1: Baseline Stress Test
     print_header("PHASE 1: Baseline Stress Test (All Nodes Alive)")
     success = stress_test_payments(100)
-    
     print("⏳ Waiting 5 seconds for consensus...")
     time.sleep(5)
-    
     current_count = verify_ledgers()
     check_raft_leader()
-    
-    new_payments = current_count - initial_count
-    print(f"\n📊 Results: {success} requests succeeded, {new_payments} payments replicated.")
+    print(f"\n📊 Results: {success} requests succeeded, {current_count - initial_count} payments replicated.")
 
-    # ─── PHASE 2: Kill Leader ─────────────────────────────────
+    # 3. PHASE 2: Kill Leader
     print_header("PHASE 2: Leader Crash & Failover Test")
     leader = get_leader()
     if leader:
@@ -221,28 +212,46 @@ if __name__ == "__main__":
         kill_node(leader)
     else:
         print("⚠️ No leader found. Skipping kill phase.")
-        
     check_raft_leader()
 
-    # ─── PHASE 3: Stress During Failover ──────────────────────
+    # 4. PHASE 3: Stress During Failover
     print_header("PHASE 3: Stress Test During Failover (4 nodes)")
     success_failover = stress_test_payments(50)
-    
-    print("⏳ Waiting 5 seconds for leader election and consensus...")
+    print("⏳ Waiting 5 seconds for consensus...")
     time.sleep(5)
     current_count_after_failover = verify_ledgers()
-    
-    new_during_failover = current_count_after_failover - current_count
-    print(f"\n📊 Results: {success_failover} successes, {new_during_failover} payments stored.")
+    print(f"\n📊 Results: {success_failover} successes, {current_count_after_failover - current_count} payments stored.")
 
-    # ─── PHASE 4: Recovery ────────────────────────────────────
+    # 5. PHASE 4: Recovery
     print_header("PHASE 4: Node Recovery & Catch-up")
     if leader:
         start_node(leader)
     
-    # ─── PHASE 5: Final Check ─────────────────────────────────
+    # 6. PHASE 5: Final Check
     print_header("PHASE 5: Final Validation")
     verify_ledgers()
     check_raft_leader()
-    
+
+    # 7. PHASE 6: Clock Skew Test
+    print_header("PHASE 6: Clock Skew Simulation & Detection")
+    skew_node = "node2"
+    port = NODES[skew_node]
+    skew_amount = 10000  # 10 seconds ahead
+    print(f"⏰ Injecting {skew_amount}ms clock skew into {skew_node} (Port {port})...")
+    try:
+        res = requests.post(f"http://localhost:{port}/admin/simulate-skew?skewMs={skew_amount}", timeout=5)
+        if res.status_code == 200:
+            print(f"✅ Skew injected successfully.")
+            print("⏳ Waiting 10 seconds for TimeSync service to process the skew...")
+            time.sleep(10)
+            status = requests.get(f"http://localhost:{port}/timesync/status", timeout=5).json()
+            print(f"📊 {skew_node} Reported Offset: {status.get('clockOffset')}ms")
+            print(f"📊 Cluster Max Skew Detected: {status.get('estimatedSkew')}ms")
+            if abs(status.get('clockOffset', 0) + skew_amount) < 2000:
+                print("✅ SUCCESS: System detected the skew and calculated a compensating offset!")
+            else:
+                print("⚠️  WAIT: Sync in progress. Check the dashboard 'Offset' column for node 2.")
+    except Exception as e:
+        print(f"❌ Failed to test clock skew: {e}")
+
     print_header("🏁 TEST SUITE COMPLETE")
