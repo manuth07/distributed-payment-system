@@ -3,575 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment System Dashboard</title>
+    <title>Distributed Payment Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #059669;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --bg: #f3f4f6;
+            --surface: #ffffff;
+            --text: #111827;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            color: #333;
-            padding: 20px;
-            min-height: 100vh;
-        }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        h1 { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .node-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .node-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow); transition: 0.2s; }
+        .node-name { font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .dot-online { background: var(--success); }
+        .dot-offline { background: var(--danger); }
+        
+        .node-metrics { font-size: 0.8rem; color: var(--text-light); margin-bottom: 1rem; line-height: 1.6; }
+        .metric-row { display: flex; justify-content: space-between; border-bottom: 1px solid #f9fafb; padding: 2px 0; }
+        .metric-val { color: var(--text); font-weight: 500; }
 
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .btn { flex: 1; padding: 0.5rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-stop { background: #fee2e2; color: #991b1b; }
+        .btn-restart { background: #dcfce7; color: #166534; }
+        .btn-reset { background: #6b7280; color: white; flex: none; width: auto; padding: 0.5rem 10px; font-size: 0.7rem; }
 
-        h1 {
-            font-size: 2em;
-            color: #0052cc;
-            margin-bottom: 5px;
-        }
+        .workspace { display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; }
+        @media (max-width: 800px) { .workspace { grid-template-columns: 1fr; } }
+        
+        .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow); margin-bottom: 1rem; }
+        .panel-heading { font-weight: 700; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
 
-        .subtitle {
-            color: #666;
-            font-size: 0.9em;
-        }
+        .form-row { margin-bottom: 1rem; }
+        label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-light); margin-bottom: 0.25rem; }
+        input { width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; }
+        .btn-submit { background: var(--primary); color: white; padding: 0.75rem; width: 100%; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+        .payment-list { list-style: none; font-size: 0.85rem; }
+        .payment-item { display: flex; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid var(--border); }
+        .payment-amt { font-weight: 700; color: var(--success); }
 
-        @media (max-width: 900px) {
-            .grid { grid-template-columns: 1fr; }
-        }
+        .repl-table { width: 100%; font-size: 0.75rem; border-collapse: collapse; margin-top: 1rem; }
+        .repl-table th { text-align: left; background: #f9fafb; padding: 0.5rem; color: var(--text-light); }
+        .repl-table td { padding: 0.5rem; border-top: 1px solid var(--border); }
 
-        .panel {
-            background: white;
-            border: 1px solid #e0e4e8;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .panel h2 {
-            color: #0052cc;
-            font-size: 1em;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #0052cc;
-        }
-
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 0.95em;
-        }
-
-        .info-item:last-child { border-bottom: none; }
-
-        .label { font-weight: 600; color: #666; }
-        .value { color: #0052cc; font-weight: 500; }
-        .value.ok { color: #28a745; }
-        .value.warn { color: #ffc400; }
-        .value.error { color: #dc3545; }
-
-        input, select {
-            width: 100%;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border: 1px solid #e0e4e8;
-            border-radius: 4px;
-            font-size: 0.9em;
-            font-family: inherit;
-        }
-
-        button {
-            width: 100%;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            background: #0052cc;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
-
-        button:hover { background: #0039a6; }
-        button:active { transform: scale(0.98); }
-
-        .btn-secondary { background: #6c757d; }
-        .btn-secondary:hover { background: #5a6268; }
-
-        .btn-danger { background: #dc3545; }
-        .btn-danger:hover { background: #c82333; }
-
-        .message {
-            padding: 10px 12px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            border-left: 4px solid #0052cc;
-            background: #e7f0ff;
-            color: #0052cc;
-            font-size: 0.9em;
-        }
-
-        .message.error {
-            border-left-color: #dc3545;
-            background: #ffe7e7;
-            color: #dc3545;
-        }
-
-        .message.success {
-            border-left-color: #28a745;
-            background: #e7ffe7;
-            color: #28a745;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9em;
-            margin-top: 10px;
-        }
-
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #e0e4e8;
-        }
-
-        th { background: #f5f7fa; font-weight: 600; color: #333; }
-        tr:hover { background: #f9f9f9; }
-
-        .node-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .node-btn {
-            padding: 12px;
-            text-align: center;
-            font-size: 0.9em;
-        }
-
-        .peers-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .peer-card {
-            background: #f5f7fa;
-            border: 1px solid #e0e4e8;
-            border-radius: 4px;
-            padding: 10px;
-            font-size: 0.85em;
-        }
-
-        .peer-card strong { color: #0052cc; display: block; margin-bottom: 5px; }
-
-        .loading { opacity: 0.6; }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        .refresh-btn {
-            margin-bottom: 15px;
-        }
+        #toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; display: none; z-index: 100; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>💳 Payment System Dashboard</h1>
-            <p class="subtitle">Raft Consensus • Time Sync • Distributed Payments</p>
+            <h1>Distributed Payment Console</h1>
+            <div id="master-state" style="font-size: 0.8rem; color: var(--text-light);">Loading...</div>
         </header>
 
-        <div class="grid">
-            <!-- Cluster Status -->
-            <div class="panel">
-                <h2>📊 Cluster Status</h2>
-                <button class="refresh-btn" onclick="updateAll()">🔄 Refresh</button>
-                <div id="clusterStatus" class="loading">Loading...</div>
-            </div>
+        <div class="node-grid" id="nodes"></div>
 
-            <!-- Node Control -->
-            <div class="panel">
-                <h2>⚙️ Node Control</h2>
-                <div class="node-grid" id="nodeControls"></div>
-                <div id="nodeMsg"></div>
-            </div>
-
-            <!-- Payment Input -->
-            <div class="panel">
-                <h2>💳 Submit Payment</h2>
-                <input type="text" id="userId" placeholder="User ID" value="user-demo">
-                <input type="number" id="amount" placeholder="Amount" value="50" min="1" step="0.01">
-                <button onclick="makePayment()">✓ Submit</button>
-                <div id="paymentMsg"></div>
-            </div>
-
-            <!-- Recent Payments -->
-            <div class="panel">
-                <h2>📝 Recent Payments</h2>
-                <button onclick="updatePayments()">🔄 Refresh</button>
-                <div id="paymentsList" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
-            </div>
-
-            <!-- Peer Replication -->
-            <div class="panel full-width">
-                <h2>🔗 Peer Replication</h2>
-                <div id="peerStatus" class="peers-grid">Loading...</div>
-            </div>
-
-            <!-- Raft Details -->
-            <div class="panel">
-                <h2>📊 Raft Consensus Details</h2>
-                <button onclick="getRaftDetails()" style="margin-bottom: 10px;">Get Raft State</button>
-                <div id="raftDetails" style="margin-top: 10px; font-size: 0.9em;"></div>
-            </div>
-
-            <!-- Time Sync Demo -->
-            <div class="panel">
-                <h2>⏱️ Time Synchronization</h2>
-                <button onclick="getTimeSyncInfo()" style="margin-bottom: 10px;">Get Time Sync Metrics</button>
-                <div id="timeSyncInfo" style="margin-top: 10px; font-size: 0.9em;"></div>
-            </div>
-
-            <!-- Fault Tolerance Test -->
-            <div class="panel full-width">
-                <h2>🧪 Fault Tolerance Demo</h2>
-                <p style="color: #666; margin-bottom: 10px; font-size: 0.9em;">
-                    <strong>Steps:</strong> 1) Kill the current leader node → 2) Watch new leader elected (term increases) → 3) Payments still work → 4) Killed node recovers and catches up
-                </p>
-                <button onclick="demoFaultTolerance()">Start Fault Tolerance Test</button>
-                <div id="ftMsg" style="margin-top: 10px;"></div>
-            </div>
-
-            <!-- API Explorer -->
-            <div class="panel full-width">
-                <h2>🔗 API Explorer & Advanced Demo</h2>
-                <p style="color: #666; margin-bottom: 10px; font-size: 0.9em;">
-                    Explore all available endpoints and test advanced scenarios
-                </p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                    <button onclick="window.open(BASE_URL + '/swagger-ui.html', '_blank')">📖 Swagger UI</button>
-                    <button onclick="window.open(BASE_URL + '/actuator/health', '_blank')">❤️ Health Check</button>
-                    <button onclick="testStressPayments()">⚡ Stress Test (10 payments)</button>
+        <div class="workspace">
+            <div>
+                <div class="panel">
+                    <div class="panel-heading">Submit Payment</div>
+                    <div class="form-row"><label>User ID</label><input type="text" id="uid" value="user_demo"></div>
+                    <div class="form-row"><label>Amount (USD)</label><input type="number" id="amt" value="100.00"></div>
+                    <button class="btn-submit" onclick="submit()">Confirm Payment</button>
                 </div>
-                <div id="stressMsg" style="margin-top: 10px;"></div>
+
+                <div class="panel">
+                    <div class="panel-heading">Replication Monitoring</div>
+                    <div id="repl-view">No leader data available.</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-heading">
+                    Transaction Journal
+                    <div style="display:flex; gap: 5px;">
+                        <button class="btn btn-reset" style="background:#d97706" onclick="resetClocks()">Reset Clocks</button>
+                        <button class="btn btn-reset" onclick="resetData()">Clear Data</button>
+                    </div>
+                </div>
+                <ul class="payment-list" id="ledger"></ul>
             </div>
         </div>
     </div>
+    <div id="toast"></div>
 
     <script>
-        const BASE_URL = window.location.origin;
-        const NODES = ['node1', 'node2', 'node3', 'node4', 'node5'];
         const PORTS = [8081, 8082, 8083, 8084, 8085];
+        let currentLeaderPort = 8081;
 
-        window.addEventListener('load', function() {
-            initNodeControls();
-            updateAll();
-            setInterval(updateAll, 5000);
-            setInterval(updatePayments, 10000);
-        });
+        async function tick() {
+            const results = await Promise.all(PORTS.map(async (p, i) => {
+                try {
+                    const status = await fetch(`http://localhost:${p}/payments/cluster-status`).then(r => r.json());
+                    const time = await fetch(`http://localhost:${p}/timesync/status`).then(r => r.json());
+                    return { i, port: p, online: true, raft: status, time: time };
+                } catch (e) { return { i, port: p, online: false }; }
+            }));
 
-        function initNodeControls() {
-            const controls = document.getElementById('nodeControls');
-            controls.innerHTML = '';
-            NODES.forEach((node, idx) => {
-                const btn = document.createElement('button');
-                btn.textContent = node.toUpperCase();
-                btn.className = 'node-btn';
-                btn.onclick = () => showNodeMenu(node, PORTS[idx]);
-                controls.appendChild(btn);
-            });
-        }
+            // Calculate Cluster Skew (Browser-side)
+            const offsets = results.filter(r => r.online).map(r => r.time.clockOffset);
+            const clusterSkew = offsets.length > 0 ? Math.max(...offsets) - Math.min(...offsets) : 0;
 
-        function showNodeMenu(nodeName, port) {
-            const choice = prompt(`${nodeName} Actions:\n1=Kill, 2=Info, 3=Logs`, '1');
-            if (choice === '1') {
-                if (confirm(`Kill ${nodeName}? This will stop the container.`)) {
-                    killNode(nodeName, port);
-                }
-            } else if (choice === '2') {
-                getNodeInfo(nodeName, port);
-            } else if (choice === '3') {
-                showMessage('nodeMsg', `View logs: docker logs ${nodeName}`, 'success');
-            }
-        }
-
-        function killNode(nodeName, port) {
-            const msg = document.getElementById('nodeMsg');
-            msg.className = 'message';
-            msg.textContent = `⏳ Killing ${nodeName}...`;
-            
-            fetch(`http://localhost:${port}/admin/shutdown`, {method: 'POST'})
-                .then(r => {
-                    msg.className = 'message success';
-                    msg.textContent = `✓ ${nodeName} shutdown initiated`;
-                })
-                .catch(e => {
-                    msg.className = 'message error';
-                    msg.textContent = `✗ ${nodeName} kill failed: ${e.message}`;
-                });
-        }
-
-        function getNodeInfo(nodeName, port) {
-            fetch(`http://localhost:${port}/admin/info`)
-                .then(r => r.json())
-                .then(data => {
-                    showMessage('nodeMsg', `✓ ${nodeName}: Port=${data.port}, Version=${data.appVersion}`, 'success');
-                })
-                .catch(e => {
-                    showMessage('nodeMsg', `✗ Error on ${nodeName}: ${e.message}`, 'error');
-                });
-        }
-
-        function updateAll() {
-            updateClusterStatus();
-            updatePayments();
-        }
-
-        function updateClusterStatus() {
-            fetch(BASE_URL + '/payments/cluster-status')
-                .then(r => r.json())
-                .then(data => {
-                    let html = `
-                        <div class="info-item">
-                            <span class="label">Node ID:</span>
-                            <span class="value">${data.thisNode}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Raft State:</span>
-                            <span class="value ${data.raftState.toLowerCase()}">${data.raftState}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Term:</span>
-                            <span class="value">${data.raftTerm}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Commit Index:</span>
-                            <span class="value">${data.commitIndex}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Log Size:</span>
-                            <span class="value">${data.logSize}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Replicated Nodes:</span>
-                            <span class="value ${data.quorumReached ? 'ok' : 'error'}">${data.replicatedNodeCount}/${data.quorumRequired}</span>
-                        </div>
-                    `;
-                    document.getElementById('clusterStatus').innerHTML = html;
-                    updatePeerStatus(data.peerReplication);
-                })
-                .catch(e => {
-                    document.getElementById('clusterStatus').innerHTML = `<div class="message error">Error: ${e.message}</div>`;
-                });
-        }
-
-        function updatePeerStatus(peers) {
-            let html = '';
-            Object.entries(peers).forEach(([peer, data]) => {
-                html += `
-                    <div class="peer-card">
-                        <strong>${peer}</strong>
-                        nextIndex: ${data.nextIndex}<br/>
-                        matchIndex: ${data.matchIndex}
-                    </div>
+            renderNodes(results, clusterSkew);
+            const leader = results.find(r => r.online && r.raft.raftState === 'LEADER');
+            if (leader) {
+                currentLeaderPort = leader.port;
+                renderLedger(leader.port);
+                renderRepl(leader.raft);
+                document.getElementById('master-state').innerHTML = `
+                    <span style="color:var(--success)">●</span> Cluster Healthy • 
+                    Leader: Node ${leader.i + 1} (Reference Time) • 
+                    <b>Max Cluster Skew: ${clusterSkew}ms</b>
                 `;
+            } else {
+                document.getElementById('master-state').textContent = '⚠️ Election in Progress...';
+            }
+        }
+
+        function renderNodes(data, globalSkew) {
+            document.getElementById('nodes').innerHTML = data.map(d => `
+                <div class="node-card" style="${!d.online ? 'opacity:0.6' : ''}; border: ${d.online && d.raft.raftState === 'LEADER' ? '2px solid var(--primary)' : '1px solid var(--border)'}">
+                    <div class="node-name">
+                        Node ${d.i + 1} ${d.online && d.raft.raftState === 'LEADER' ? '👑' : ''}
+                        <span class="status-dot ${d.online ? 'dot-online' : 'dot-offline'}"></span>
+                    </div>
+                    <div class="node-metrics">
+                        <div class="metric-row"><span>Raft State:</span><span class="metric-val" style="color:${d.online && d.raft.raftState === 'LEADER' ? 'var(--primary)' : ''}">${d.online ? d.raft.raftState : 'OFFLINE'}</span></div>
+                        <div class="metric-row"><span>${d.online && d.raft.raftState === 'LEADER' ? 'Reference Time:' : 'Sync Time:'}</span><span class="metric-val">${d.online ? new Date(Date.now() + d.time.clockOffset).toLocaleTimeString() : '--:--:--'}</span></div>
+                        <div class="metric-row"><span>Clock Offset:</span><span class="metric-val" style="color:${Math.abs(d.time?.clockOffset) > 1000 ? 'var(--danger)' : ''}">${d.online ? d.time.clockOffset + 'ms' : '-'}</span></div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-restart" onclick="setSkew(${d.port})" ${!d.online ? 'disabled' : ''}>Skew</button>
+                        <button class="btn btn-stop" onclick="act(${d.port})" ${!d.online ? 'disabled' : ''}>Stop</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function resetClocks() {
+            if (!confirm("Reset ALL clock simulations and offsets?")) return;
+            toast("⏰ Resetting clocks...", "#d97706");
+            await Promise.all(PORTS.map(p => fetch(`http://localhost:${p}/admin/reset-clocks`, { method: 'POST' }).catch(e => {})));
+            tick();
+        }
+
+        async function setSkew(port) {
+            const skew = prompt("Enter simulated clock skew in milliseconds (e.g., 5000 for 5s fast, -5000 for 5s slow):", "0");
+            if (skew === null) return;
+            toast("⏰ Injecting skew...", "#d97706");
+            try {
+                await fetch(`http://localhost:${port}/admin/simulate-skew?skewMs=${skew}`, { method: 'POST' });
+                tick();
+            } catch(e) { toast("❌ Failed to set skew", "#dc2626"); }
+        }
+
+        async function renderLedger(port) {
+            try {
+                const payments = await fetch(`http://localhost:${port}/payments`).then(r => r.json());
+                document.getElementById('ledger').innerHTML = payments.length ? payments.slice(-8).reverse().map(p => `
+                    <li class="payment-item">
+                        <div><div style="font-weight:600">${p.userId}</div><div style="font-size:0.7rem;color:var(--text-light)">${p.id.split('-')[0]}</div></div>
+                        <div class="payment-amt">$${parseFloat(p.amount).toFixed(2)}</div>
+                    </li>`).join('') : '<li style="text-align:center;color:var(--text-light);padding:1rem;">Journal is empty</li>';
+            } catch(e) {}
+        }
+
+        function renderRepl(raft) {
+            if (!raft.peerReplication) return;
+            let html = '<table class="repl-table"><thead><tr><th>Peer</th><th>Next</th><th>Match</th></tr></thead><tbody>';
+            Object.entries(raft.peerReplication).forEach(([peer, data]) => {
+                html += `<tr><td>${peer}</td><td>${data.nextIndex}</td><td>${data.matchIndex}</td></tr>`;
             });
-            document.getElementById('peerStatus').innerHTML = html || 'No peer data';
+            document.getElementById('repl-view').innerHTML = html + '</tbody></table>';
         }
 
-        function makePayment() {
-            const userId = document.getElementById('userId').value;
-            const amount = document.getElementById('amount').value;
-            const msg = document.getElementById('paymentMsg');
-
-            if (!userId || !amount) {
-                showMessage('paymentMsg', '✗ Fill in all fields', 'error');
-                return;
-            }
-
-            msg.className = 'message';
-            msg.textContent = '⏳ Processing...';
-
-            fetch(`${BASE_URL}/payments?amount=${amount}&userId=${userId}`, {method: 'POST'})
-                .then(r => r.json())
-                .then(data => {
-                    showMessage('paymentMsg', `✓ Payment accepted!`, 'success');
-                    setTimeout(updatePayments, 1000);
-                })
-                .catch(e => {
-                    showMessage('paymentMsg', `✗ Error: ${e.message}`, 'error');
-                });
+        async function submit() {
+            const uid = document.getElementById('uid').value, amt = document.getElementById('amt').value;
+            try {
+                const res = await fetch(`http://localhost:${currentLeaderPort}/payments?userId=${uid}&amount=${amt}`, { method: 'POST' });
+                if (res.ok) toast("✅ Committed", "#059669"); else toast("❌ Consensus failed", "#dc2626");
+            } catch(e) { toast("❌ Connection error", "#dc2626"); }
         }
 
-        function updatePayments() {
-            fetch(BASE_URL + '/payments')
-                .then(r => r.json())
-                .then(payments => {
-                    const list = document.getElementById('paymentsList');
-                    if (!payments || payments.length === 0) {
-                        list.innerHTML = '<p style="color: #666;">No payments yet</p>';
-                        return;
-                    }
-
-                    let html = '<table><tr><th>ID</th><th>User</th><th>Amount</th><th>Status</th></tr>';
-                    payments.slice(-8).reverse().forEach(p => {
-                        html += `<tr>
-                            <td>${p.id.substring(0, 8)}...</td>
-                            <td>${p.userId}</td>
-                            <td>$${p.amount}</td>
-                            <td>${p.status}</td>
-                        </tr>`;
-                    });
-                    html += '</table>';
-                    list.innerHTML = html;
-                })
-                .catch(e => {
-                    document.getElementById('paymentsList').innerHTML = `<div class="message error">Error: ${e.message}</div>`;
-                });
+        async function resetData() {
+            if (!confirm("Clear all payments on ALL nodes?")) return;
+            toast("🧹 Clearing system...", "#6b7280");
+            await Promise.all(PORTS.map(p => fetch(`http://localhost:${p}/admin/reset-all`, { method: 'POST' }).catch(e => {})));
+            tick();
         }
 
-        function showMessage(elementId, text, type = 'info') {
-            const el = document.getElementById(elementId);
-            el.className = `message ${type !== 'info' ? type : ''}`;
-            el.textContent = text;
+        async function act(port) {
+            toast("🔄 Instruction sent...", "#2563eb");
+            try { await fetch(`http://localhost:${port}/admin/shutdown`, { method: 'POST' }); } catch(e) {}
         }
 
-        function getRaftDetails() {
-            fetch(BASE_URL + '/raft/status')
-                .then(r => r.json())
-                .then(data => {
-                    const html = `
-                        <div class="info-item">
-                            <span class="label">State:</span>
-                            <span class="value">${data.state}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Current Term:</span>
-                            <span class="value">${data.term}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Voted For:</span>
-                            <span class="value">${data.votedFor || 'None'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Commit Index:</span>
-                            <span class="value">${data.commitIndex}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Last Applied:</span>
-                            <span class="value">${data.lastApplied}</span>
-                        </div>
-                    `;
-                    document.getElementById('raftDetails').innerHTML = html;
-                })
-                .catch(e => {
-                    document.getElementById('raftDetails').innerHTML = `<div class="message error">Error: ${e.message}</div>`;
-                });
+        function toast(m, c) {
+            const t = document.getElementById('toast'); t.textContent = m; t.style.background = c; t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
         }
 
-        function getTimeSyncInfo() {
-            fetch(BASE_URL + '/timesync/status')
-                .then(r => r.json())
-                .then(data => {
-                    const skswClass = Math.abs(data.clockSkew) > 100 ? 'error' : (Math.abs(data.clockSkew) > 50 ? 'warn' : 'ok');
-                    const html = `
-                        <div class="info-item">
-                            <span class="label">Clock Offset (ms):</span>
-                            <span class="value ${skswClass}">${data.clockOffset || 0}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Clock Skew (ms):</span>
-                            <span class="value ${skswClass}">${data.clockSkew || 0}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Last Sync Time:</span>
-                            <span class="value">${new Date(data.lastSyncTime).toLocaleTimeString() || 'Never'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Sync Age (s):</span>
-                            <span class="value">${data.syncAge || 'N/A'}</span>
-                        </div>
-                    `;
-                    document.getElementById('timeSyncInfo').innerHTML = html;
-                })
-                .catch(e => {
-                    document.getElementById('timeSyncInfo').innerHTML = `<div class="message error">Time sync endpoint not available</div>`;
-                });
-        }
-
-        function demoFaultTolerance() {
-            const msg = document.getElementById('ftMsg');
-            msg.className = 'message';
-            msg.innerHTML = `
-                <strong>Fault Tolerance Demo Steps:</strong><br/>
-                1. Click a Node button above → Select "Kill" to stop leader<br/>
-                2. Watch Replicated Nodes drop temporarily<br/>
-                3. New leader elected (Term increases, State changes to LEADER)<br/>
-                4. Payments continue working despite node down<br/>
-                5. Submit test payment above - should succeed immediately<br/>
-                6. Wait 30s for killed node to auto-recover<br/>
-                7. Watch Replicated Nodes recover to 3/5 or higher<br/>
-                <br/>
-                <strong>Key observations:</strong><br/>
-                • Quorum (3 nodes) elected new leader instantly<br/>
-                • State machine stayed available for payments<br/>
-                • Log replication caught up automatically<br/>
-                • No data loss thanks to Raft consensus
-            `;
-        }
-
-        function testStressPayments() {
-            const msg = document.getElementById('stressMsg');
-            msg.className = 'message';
-            msg.textContent = '⏳ Submitting 10 payments...';
-
-            let success = 0, failed = 0;
-            const baseUserId = `stress-user-${Date.now()}`;
-
-            for (let i = 0; i < 10; i++) {
-                setTimeout(() => {
-                    fetch(`${BASE_URL}/payments?amount=${10 + i}&userId=${baseUserId}-${i}`, {method: 'POST'})
-                        .then(r => r.json())
-                        .then(data => {
-                            success++;
-                            if (success + failed === 10) {
-                                msg.className = 'message success';
-                                msg.textContent = `✓ Stress test complete: ${success}/10 successful, ${failed}/10 failed`;
-                                setTimeout(updatePayments, 500);
-                            }
-                        })
-                        .catch(e => {
-                            failed++;
-                            if (success + failed === 10) {
-                                msg.className = failed > 0 ? 'message error' : 'message success';
-                                msg.textContent = `Result: ${success}/10 successful, ${failed}/10 failed`;
-                                setTimeout(updatePayments, 500);
-                            }
-                        });
-                }, i * 100); // Stagger requests by 100ms
-            }
-        }
+        setInterval(tick, 3000); tick();
     </script>
 </body>
 </html>

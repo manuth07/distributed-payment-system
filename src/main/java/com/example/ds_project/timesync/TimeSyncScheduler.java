@@ -84,8 +84,8 @@ public class TimeSyncScheduler {
         String syncUrl = leaderUrl + "/timesync/request";
         
         try {
-            // Create sync request with current local time
-            long clientSendTime = System.currentTimeMillis();
+            // Create sync request with current local time (including simulation skew)
+            long clientSendTime = clockSyncService.getSimulatedTime();
             TimeSyncRequest request = new TimeSyncRequest(nodeId, clientSendTime);
             
             // Send to leader and receive response
