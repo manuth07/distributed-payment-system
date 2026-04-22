@@ -67,6 +67,14 @@ public class PaymentStateMachine {
             // (This handles case where last few entries remain buffered)
             log.debug("Applied entries up to index {}, checking for buffered entries", commitIndex);
         }
+
+        // Phase 4: Proactive Flush
+        // Even if no new entries are committed, we must flush the reorder buffer
+        // if the time window has passed.
+        List<LogEntry> expiredEntries = reorderService.flushExpiredEntries();
+        for (LogEntry expiredEntry : expiredEntries) {
+            applyEntry(expiredEntry);
+        }
     }
 
     private void applyEntry(LogEntry entry) {

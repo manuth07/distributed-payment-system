@@ -23,6 +23,7 @@ public class ClockSynchronizationService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String dataDir;
     private final String nodeId;
+    private long simulationSkewMs = 0; // Phase 4 simulation
     
     // Configuration defaults
     private static final long MAX_OFFSET_TOLERANCE = 5000;  // 5 seconds - reject offsets larger than this
@@ -36,6 +37,14 @@ public class ClockSynchronizationService {
     }
     
     /**
+     * Helper to get time that includes the simulated skew.
+     * Use this instead of System.currentTimeMillis() throughout the sync logic.
+     */
+    public long getSimulatedTime() {
+        return System.currentTimeMillis() + simulationSkewMs;
+    }
+
+    /**
      * NTP-style offset calculation using round-trip delay estimation.
      * Formula: offset = ((serverReceiveTime - clientSendTime) + (serverSendTime - clientReceiveTime)) / 2
      * 
@@ -43,24 +52,24 @@ public class ClockSynchronizationService {
      * @return TimeSyncResponse with calculated offset
      */
     public TimeSyncResponse calculateSyncResponse(TimeSyncRequest request) {
-        long serverReceiveTime = System.currentTimeMillis();  // When server received request
+        long serverReceiveTime = getSimulatedTime();  // When server received request
         long clientSendTime = request.clientSendTime();
         
         // Sanity check: reject if client time is wildly off (more than 1 hour in future)
-        if (clientSendTime > System.currentTimeMillis() + 3600_000) {
+        if (clientSendTime > getSimulatedTime() + 3600_000) {
             log.warn("Rejecting sync request from {} with future timestamp: {}",
                     request.nodeId(), clientSendTime);
-            return new TimeSyncResponse(serverReceiveTime, System.currentTimeMillis(), 0);
+            return new TimeSyncResponse(serverReceiveTime, getSimulatedTime(), 0);
         }
         
-        long serverSendTime = System.currentTimeMillis();
+        long serverSendTime = getSimulatedTime();
         
         // NTP offset calculation: how much to add to client's clock to match server
         // offset = ((T2 - T1) + (T3 - T4)) / 2
         // where T1 = clientSendTime, T2 = serverReceiveTime, T3 = serverSendTime, T4 = clientReceiveTime
         // Client will calculate T4 when it receives this response
         // So we return T2 and T3; client computes the full offset
-        long estimatedOffset = (serverReceiveTime - clientSendTime + serverSendTime - System.currentTimeMillis()) / 2;
+        long estimatedOffset = (serverReceiveTime - clientSendTime + serverSendTime - getSimulatedTime()) / 2;
         
         // Simpler approach: just use one-way delay estimate
         // offset = serverReceiveTime - clientSendTime (assumes symmetric network delay)
@@ -81,23 +90,23 @@ public class ClockSynchronizationService {
      * @return true if offset was successfully updated, false if invalid or out of tolerance
      */
     public boolean processTimeSyncResponse(TimeSyncResponse response, long clientSendTime) {
-        long clientReceiveTime = System.currentTimeMillis();
+        long clientReceiveTime = getSimulatedTime();
         
         // Full NTP offset calculation
         long serverReceiveTime = response.serverReceiveTime();
         long serverSendTime = response.serverSendTime();
         
-        // offset = ((T2 - T1) + (T3 - T4)) / 2
+        // offset = ((serverReceiveTime - clientSendTime) + (serverSendTime - clientReceiveTime)) / 2
         long offset = ((serverReceiveTime - clientSendTime) + (serverSendTime - clientReceiveTime)) / 2;
         long roundTripDelay = (clientReceiveTime - clientSendTime) - (serverSendTime - serverReceiveTime);
         
-        // Use response's pre-calculated offset if preferred
+        // Use response's pre-calculated offset
         offset = response.estimatedClockOffset();
         
-        // Validate offset is within tolerance
-        if (Math.abs(offset) > MAX_OFFSET_TOLERANCE) {
-            log.warn("Rejecting clock offset {} ms for {} - exceeds tolerance of {} ms",
-                    offset, nodeId, MAX_OFFSET_TOLERANCE);
+        // Validate offset is within tolerance (increased for simulation support)
+        if (Math.abs(offset) > 3600_000) { // 1 hour tolerance for heavy simulation testing
+            log.warn("Rejecting clock offset {} ms for {} - exceeds simulation tolerance",
+                    offset, nodeId);
             return false;
         }
         
@@ -108,8 +117,8 @@ public class ClockSynchronizationService {
         );
         metadata.updateOffset(offset, Math.abs(roundTripDelay));
         
-        log.info("Clock offset updated for {}: {} ms (RTD: {} ms, syncCount: {})",
-                nodeId, offset, Math.abs(roundTripDelay), metadata.getSyncCount());
+        log.info("Clock offset updated for {}: {} ms (RTD: {} ms)",
+                nodeId, offset, Math.abs(roundTripDelay));
         
         persistMetadataToDisk();
         return true;
@@ -181,7 +190,16 @@ public class ClockSynchronizationService {
      */
     public long applyClockCorrection(long timestamp) {
         long offset = getCurrentOffset();
-        return timestamp + offset;
+        return timestamp + offset + simulationSkewMs;
+    }
+
+    public void setSimulationSkewMs(long skewMs) {
+        this.simulationSkewMs = skewMs;
+        log.info("Simulated clock skew set to {} ms for {}", skewMs, nodeId);
+    }
+
+    public long getSimulationSkewMs() {
+        return simulationSkewMs;
     }
     
     /**
@@ -245,5 +263,15 @@ public class ClockSynchronizationService {
         } catch (IOException e) {
             log.error("Failed to create data directory: {}", dataDir, e);
         }
+    }
+
+    /**
+     * Reset all clock simulation and stored offsets.
+     */
+    public synchronized void resetClocks() {
+        this.simulationSkewMs = 0;
+        this.nodeOffsets.clear();
+        persistMetadataToDisk();
+        log.info("Clock simulation and offsets have been reset for node {}", nodeId);
     }
 }
